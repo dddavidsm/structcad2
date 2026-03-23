@@ -1,0 +1,153 @@
+"""
+StructCAD Pro — Backend FastAPI
+Recibe datos del formulario adaptativo + canvas_data (zona picada en base64)
+y genera planos DXF con todas las capas y elementos marcados.
+"""
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from typing import Optional, List, Any
+import io, base64
+
+from dxf_engine import (
+    generate_dxf_pillar_rect, generate_dxf_pillar_circ,
+    generate_dxf_beam, generate_dxf_footing,
+    generate_dxf_forjado, generate_dxf_stair
+)
+
+app = FastAPI(title="StructCAD Pro API", version="2.0.0")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+# ─── MODELOS BASE ──────────────────────────────────────────────────────────────
+
+class InspectionBase(BaseModel):
+    element_id: Optional[str] = "E-01"
+    planta: Optional[str] = None
+    eje: Optional[str] = None
+    fecha_insp: Optional[str] = None
+    rebar_found: Optional[str] = "Sí"
+    cover_measured: Optional[float] = None
+    corrosion: Optional[str] = "Sin patologías"
+    notes: Optional[str] = None
+    anomalies: Optional[str] = None
+    canvas_data: Optional[str] = None   # base64 PNG de la zona picada
+    markers: Optional[List[Any]] = []   # [{type, x, y, diam, layer}]
+
+class PillarRectData(InspectionBase):
+    width: float = Field(..., gt=0)
+    depth: float = Field(..., gt=0)
+    bars_front_count: int = Field(..., ge=2, le=16)
+    bars_front_diam: float = Field(..., gt=0)
+    cover_front: float = Field(..., gt=0)
+    bars_lateral_count: int = Field(..., ge=2, le=16)
+    bars_lateral_diam: float = Field(..., gt=0)
+    cover_lateral: float = Field(..., gt=0)
+    stirrup_diam: float = Field(..., gt=0)
+    stirrup_spacing: Optional[float] = 15
+    inspection_height: float = Field(..., gt=0)
+
+class PillarCircData(InspectionBase):
+    diameter: float = Field(..., gt=0)
+    bars_count: int = Field(..., ge=4, le=16)
+    bars_diam: float = Field(..., gt=0)
+    cover: float = Field(..., gt=0)
+    stirrup_diam: float = Field(..., gt=0)
+    stirrup_spacing: Optional[float] = 10
+    inspection_height: float = Field(..., gt=0)
+
+class BeamData(InspectionBase):
+    width: float = Field(..., gt=0)
+    height: float = Field(..., gt=0)
+    span: Optional[float] = 600
+    bars_bottom_count: int = Field(..., ge=2, le=10)
+    bars_bottom_diam: float = Field(..., gt=0)
+    bars_top_count: int = Field(..., ge=2, le=6)
+    bars_top_diam: float = Field(..., gt=0)
+    cover: float = Field(..., gt=0)
+    stirrup_diam: float = Field(..., gt=0)
+    stirrup_spacing: float = Field(..., gt=0)
+    inspection_length: float = Field(..., gt=0)
+
+class FootingData(InspectionBase):
+    length: float = Field(..., gt=0)
+    width: float = Field(..., gt=0)
+    height: float = Field(..., gt=0)
+    pedestal_w: Optional[float] = 40
+    pedestal_d: Optional[float] = 40
+    bars_x_count: int = Field(..., ge=2, le=20)
+    bars_x_diam: float = Field(..., gt=0)
+    bars_y_count: int = Field(..., ge=2, le=20)
+    bars_y_diam: float = Field(..., gt=0)
+    cover_bottom: float = Field(..., gt=0)
+    cover_sides: float = Field(..., gt=0)
+
+class ForjadoData(InspectionBase):
+    thickness: float = Field(..., gt=0)
+    span_x: Optional[float] = 500
+    span_y: Optional[float] = 400
+    forjado_type: Optional[str] = "Losa maciza"
+    bars_x_count: int = Field(..., ge=2)
+    bars_x_diam: float = Field(..., gt=0)
+    bars_x_spacing: float = Field(..., gt=0)
+    bars_y_count: int = Field(..., ge=2)
+    bars_y_diam: float = Field(..., gt=0)
+    bars_y_spacing: float = Field(..., gt=0)
+    cover_bottom: float = Field(..., gt=0)
+    cover_top: float = Field(..., gt=0)
+    inspection_area: Optional[float] = 400
+
+class StairData(InspectionBase):
+    stair_width: float = Field(..., gt=0)
+    riser: float = Field(..., gt=0)
+    tread: float = Field(..., gt=0)
+    slab_thickness: float = Field(..., gt=0)
+    wall_thickness: Optional[float] = 6.5
+    steps_count: int = Field(..., ge=2, le=25)
+    bars_long_diam: float = Field(..., gt=0)
+    bars_long_sep: float = Field(..., gt=0)
+    bars_trans_diam: float = Field(..., gt=0)
+    bars_trans_sep: float = Field(..., gt=0)
+    cover: float = Field(..., gt=0)
+    relleno_type: Optional[str] = "Mortero/Cascote"
+    depth_no_rebar: Optional[float] = None
+
+# ─── ENDPOINTS ────────────────────────────────────────────────────────────────
+
+@app.get("/")
+def root():
+    return {"status": "ok", "version": "2.0.0", "structures": ["pillar-rect","pillar-circ","beam","footing","forjado","stair"]}
+
+def _stream(buf: io.BytesIO, filename: str) -> StreamingResponse:
+    return StreamingResponse(buf, media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+@app.post("/generate/pillar-rect")
+def gen_pilar_rect(data: PillarRectData):
+    try: return _stream(generate_dxf_pillar_rect(data), f"pilar_rect_{data.element_id}.dxf")
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/generate/pillar-circ")
+def gen_pilar_circ(data: PillarCircData):
+    try: return _stream(generate_dxf_pillar_circ(data), f"pilar_circ_{data.element_id}.dxf")
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/generate/beam")
+def gen_beam(data: BeamData):
+    try: return _stream(generate_dxf_beam(data), f"viga_{data.element_id}.dxf")
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/generate/footing")
+def gen_footing(data: FootingData):
+    try: return _stream(generate_dxf_footing(data), f"zapata_{data.element_id}.dxf")
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/generate/forjado")
+def gen_forjado(data: ForjadoData):
+    try: return _stream(generate_dxf_forjado(data), f"forjado_{data.element_id}.dxf")
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/generate/stair")
+def gen_stair(data: StairData):
+    try: return _stream(generate_dxf_stair(data), f"escalera_{data.element_id}.dxf")
+    except Exception as e: raise HTTPException(500, str(e))

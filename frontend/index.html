@@ -1,0 +1,1761 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>StructCAD Pro — Inspección Estructural</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px;-webkit-text-size-adjust:100%}
+
+/* ── TOKENS CORPORATIVOS ── */
+:root{
+  --white:#ffffff;
+  --gray-50:#f8f9fa;
+  --gray-100:#f1f3f5;
+  --gray-200:#e9ecef;
+  --gray-300:#dee2e6;
+  --gray-400:#ced4da;
+  --gray-500:#adb5bd;
+  --gray-600:#6c757d;
+  --gray-700:#495057;
+  --gray-800:#343a40;
+  --gray-900:#212529;
+  --blue-50:#e7f0ff;
+  --blue-100:#c3d9ff;
+  --blue-500:#2563eb;
+  --blue-600:#1d4ed8;
+  --blue-700:#1e40af;
+  --red-100:#fee2e2;
+  --red-500:#ef4444;
+  --orange-100:#fff3cd;
+  --orange-500:#f59e0b;
+  --green-100:#dcfce7;
+  --green-500:#16a34a;
+  --picked-fill:rgba(251,146,60,0.35);
+  --picked-stroke:#ea580c;
+  --bar-color:#1e40af;
+  --stirrup-color:#15803d;
+  --font-sans:'Inter',system-ui,sans-serif;
+  --font-mono:'IBM Plex Mono',monospace;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.06);
+  --shadow:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06);
+  --shadow-md:0 4px 6px rgba(0,0,0,.07),0 2px 4px rgba(0,0,0,.06);
+  --shadow-lg:0 10px 15px rgba(0,0,0,.1),0 4px 6px rgba(0,0,0,.05);
+  --r:6px;--r-lg:10px;
+  --sidebar:260px;
+  --topbar:56px;
+}
+
+body{font-family:var(--font-sans);background:var(--gray-100);color:var(--gray-900);line-height:1.5;min-height:100vh}
+
+/* ── TOPBAR ── */
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:var(--topbar);
+  background:var(--white);border-bottom:1px solid var(--gray-200);
+  display:flex;align-items:center;padding:0 1.25rem;
+  gap:1rem;z-index:200;box-shadow:var(--shadow-sm);
+}
+.topbar-logo{display:flex;align-items:center;gap:.6rem;text-decoration:none}
+.topbar-logo-mark{
+  width:32px;height:32px;background:var(--blue-500);border-radius:var(--r);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.topbar-logo-mark svg{width:18px;height:18px;fill:white}
+.topbar-logo-text{font-size:.95rem;font-weight:700;color:var(--gray-900);letter-spacing:-.02em}
+.topbar-logo-text span{color:var(--blue-500)}
+.topbar-divider{width:1px;height:24px;background:var(--gray-200);margin:0 .25rem}
+.topbar-title{font-size:.8rem;color:var(--gray-600);font-weight:500}
+.topbar-spacer{flex:1}
+.topbar-badge{
+  font-size:.68rem;background:var(--blue-50);color:var(--blue-600);
+  border:1px solid var(--blue-100);padding:.2rem .6rem;border-radius:100px;font-weight:500;
+}
+.topbar-user{
+  width:32px;height:32px;border-radius:50%;background:var(--gray-200);
+  display:flex;align-items:center;justify-content:center;font-size:.75rem;
+  font-weight:600;color:var(--gray-600);flex-shrink:0;cursor:pointer;
+}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  position:fixed;top:var(--topbar);left:0;bottom:0;width:var(--sidebar);
+  background:var(--white);border-right:1px solid var(--gray-200);
+  overflow-y:auto;z-index:100;padding:.75rem 0;
+}
+.sidebar-section{margin-bottom:.25rem}
+.sidebar-section-label{
+  font-size:.65rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--gray-500);padding:.5rem 1rem .35rem;
+}
+.sidebar-item{
+  display:flex;align-items:center;gap:.6rem;
+  padding:.55rem 1rem;cursor:pointer;
+  font-size:.82rem;font-weight:500;color:var(--gray-700);
+  border-left:3px solid transparent;transition:all .12s;
+  text-decoration:none;
+}
+.sidebar-item:hover{background:var(--gray-50);color:var(--gray-900)}
+.sidebar-item.active{
+  background:var(--blue-50);color:var(--blue-600);
+  border-left-color:var(--blue-500);
+}
+.sidebar-item svg{width:16px;height:16px;flex-shrink:0;opacity:.7}
+.sidebar-item.active svg{opacity:1}
+.sidebar-count{
+  margin-left:auto;font-size:.65rem;background:var(--gray-200);
+  color:var(--gray-600);padding:.1rem .45rem;border-radius:100px;
+}
+.sidebar-item.active .sidebar-count{background:var(--blue-100);color:var(--blue-600)}
+
+/* ── MAIN ── */
+.main{margin-left:var(--sidebar);padding-top:var(--topbar)}
+.page{display:none;padding:1.5rem}
+.page.active{display:block}
+
+/* ── PAGE HEADER ── */
+.page-header{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  margin-bottom:1.5rem;gap:1rem;flex-wrap:wrap;
+}
+.page-header-left h1{font-size:1.2rem;font-weight:700;color:var(--gray-900);margin-bottom:.2rem}
+.page-header-left p{font-size:.8rem;color:var(--gray-600)}
+.btn{
+  display:inline-flex;align-items:center;gap:.4rem;
+  font-family:var(--font-sans);font-size:.8rem;font-weight:500;
+  padding:.45rem .9rem;border-radius:var(--r);cursor:pointer;
+  border:1px solid transparent;transition:all .15s;text-decoration:none;
+  white-space:nowrap;
+}
+.btn-primary{background:var(--blue-500);color:white;border-color:var(--blue-500)}
+.btn-primary:hover{background:var(--blue-600);border-color:var(--blue-600)}
+.btn-secondary{background:var(--white);color:var(--gray-700);border-color:var(--gray-300)}
+.btn-secondary:hover{background:var(--gray-50);border-color:var(--gray-400)}
+.btn-danger{background:var(--red-500);color:white}
+.btn-danger:hover{background:#dc2626}
+.btn-sm{font-size:.73rem;padding:.3rem .65rem}
+.btn-lg{font-size:.88rem;padding:.6rem 1.2rem}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn svg{width:14px;height:14px}
+
+/* ── CARDS ── */
+.card{
+  background:var(--white);border:1px solid var(--gray-200);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-sm);
+}
+.card-header{
+  padding:.9rem 1.25rem;border-bottom:1px solid var(--gray-200);
+  display:flex;align-items:center;justify-content:space-between;
+  gap:.75rem;
+}
+.card-header h3{font-size:.88rem;font-weight:600;color:var(--gray-900)}
+.card-header p{font-size:.75rem;color:var(--gray-500);margin-top:.1rem}
+.card-body{padding:1.25rem}
+.card-footer{
+  padding:.75rem 1.25rem;border-top:1px solid var(--gray-200);
+  display:flex;align-items:center;gap:.75rem;background:var(--gray-50);
+  border-radius:0 0 var(--r-lg) var(--r-lg);
+}
+
+/* ── STRUCTURE SELECTOR ── */
+.struct-grid{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;
+  margin-bottom:1.5rem;
+}
+.struct-card{
+  background:var(--white);border:2px solid var(--gray-200);border-radius:var(--r-lg);
+  padding:1rem;cursor:pointer;transition:all .15s;text-align:center;
+}
+.struct-card:hover{border-color:var(--blue-500);box-shadow:var(--shadow-md)}
+.struct-card.active{
+  border-color:var(--blue-500);background:var(--blue-50);
+  box-shadow:0 0 0 3px rgba(37,99,235,.12);
+}
+.struct-card-icon{
+  width:48px;height:48px;margin:0 auto .65rem;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--gray-100);border-radius:var(--r);
+}
+.struct-card.active .struct-card-icon{background:var(--blue-100)}
+.struct-card-icon svg{width:28px;height:28px}
+.struct-card h4{font-size:.82rem;font-weight:600;color:var(--gray-800);margin-bottom:.2rem}
+.struct-card p{font-size:.7rem;color:var(--gray-500);line-height:1.4}
+
+/* ── FORM ── */
+.form-layout{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem}
+@media(max-width:900px){.form-layout{grid-template-columns:1fr}}
+.form-section{margin-bottom:1.25rem}
+.form-section-title{
+  font-size:.72rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--gray-500);margin-bottom:.75rem;padding-bottom:.5rem;
+  border-bottom:1px solid var(--gray-200);display:flex;align-items:center;gap:.4rem;
+}
+.form-section-title svg{width:13px;height:13px}
+.fields-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:.65rem}
+.field{display:flex;flex-direction:column;gap:.3rem}
+.field label{font-size:.72rem;font-weight:500;color:var(--gray-700)}
+.field label .unit{font-weight:400;color:var(--gray-500);font-size:.68rem}
+.field input,.field select,.field textarea{
+  background:var(--white);border:1px solid var(--gray-300);border-radius:var(--r);
+  color:var(--gray-900);font-family:var(--font-sans);font-size:.82rem;
+  padding:.4rem .65rem;width:100%;transition:border-color .15s,box-shadow .15s;
+}
+.field input:focus,.field select:focus,.field textarea:focus{
+  outline:none;border-color:var(--blue-500);box-shadow:0 0 0 3px rgba(37,99,235,.1);
+}
+.field textarea{resize:vertical;min-height:70px;font-size:.78rem}
+.field-hint{font-size:.68rem;color:var(--gray-500);margin-top:.2rem}
+.field-error{border-color:var(--red-500)!important;box-shadow:0 0 0 3px rgba(239,68,68,.1)!important}
+
+/* ── INLINE ALERT ── */
+.alert{
+  display:flex;align-items:flex-start;gap:.65rem;
+  padding:.75rem 1rem;border-radius:var(--r);font-size:.78rem;margin-bottom:1rem;
+}
+.alert svg{width:16px;height:16px;flex-shrink:0;margin-top:.05rem}
+.alert-info{background:var(--blue-50);color:var(--blue-700);border:1px solid var(--blue-100)}
+.alert-warn{background:var(--orange-100);color:#92400e;border:1px solid #fcd34d}
+.alert-success{background:var(--green-100);color:#166534;border:1px solid #86efac}
+.alert-error{background:var(--red-100);color:#991b1b;border:1px solid #fca5a5}
+
+/* ── CANVAS EDITOR ── */
+.canvas-wrapper{
+  position:relative;background:var(--gray-100);border:1px solid var(--gray-200);
+  border-radius:var(--r);overflow:hidden;
+}
+.canvas-editor{display:block;width:100%;cursor:crosshair;touch-action:none}
+.canvas-toolbar{
+  display:flex;align-items:center;gap:.5rem;padding:.6rem .75rem;
+  background:var(--white);border-bottom:1px solid var(--gray-200);flex-wrap:wrap;
+}
+.tool-btn{
+  display:inline-flex;align-items:center;gap:.35rem;
+  font-size:.72rem;font-weight:500;color:var(--gray-600);
+  background:var(--gray-50);border:1px solid var(--gray-200);
+  border-radius:var(--r);padding:.3rem .6rem;cursor:pointer;transition:all .12s;
+}
+.tool-btn:hover{background:var(--gray-100);color:var(--gray-800)}
+.tool-btn.active{background:var(--blue-50);color:var(--blue-600);border-color:var(--blue-200)}
+.tool-btn svg{width:13px;height:13px}
+.tool-sep{width:1px;height:20px;background:var(--gray-200);margin:0 .1rem}
+.brush-sizes{display:flex;align-items:center;gap:.35rem}
+.brush-opt{
+  width:24px;height:24px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;cursor:pointer;border:2px solid transparent;
+  background:var(--gray-50);transition:all .12s;
+}
+.brush-opt.active{border-color:var(--blue-500)}
+.brush-opt:hover{background:var(--gray-100)}
+.brush-dot{border-radius:50%;background:var(--gray-600)}
+.canvas-legend{
+  display:flex;align-items:center;gap:1rem;padding:.5rem .75rem;
+  background:var(--gray-50);border-top:1px solid var(--gray-200);flex-wrap:wrap;
+}
+.legend-item{display:flex;align-items:center;gap:.35rem;font-size:.7rem;color:var(--gray-600)}
+.legend-swatch{width:14px;height:14px;border-radius:3px;flex-shrink:0}
+.canvas-info{
+  position:absolute;bottom:.5rem;right:.5rem;
+  background:rgba(255,255,255,.92);border:1px solid var(--gray-200);
+  border-radius:var(--r);padding:.3rem .6rem;font-size:.65rem;
+  color:var(--gray-600);font-family:var(--font-mono);pointer-events:none;
+}
+
+/* ── TABS ── */
+.tabs{display:flex;border-bottom:1px solid var(--gray-200);margin-bottom:1.25rem;gap:.1rem}
+.tab{
+  font-size:.8rem;font-weight:500;color:var(--gray-600);padding:.55rem .9rem;
+  cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;
+  transition:all .12s;display:flex;align-items:center;gap:.4rem;
+}
+.tab:hover{color:var(--gray-900)}
+.tab.active{color:var(--blue-600);border-bottom-color:var(--blue-500)}
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* ── STATUS BAR ── */
+.status-bar{
+  display:flex;align-items:center;gap:.75rem;flex-wrap:wrap;
+}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-dot.ok{background:var(--green-500)}
+.status-dot.err{background:var(--red-500)}
+.status-dot.idle{background:var(--gray-400)}
+.status-dot.loading{background:var(--orange-500);animation:pulse .8s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.status-text{font-size:.75rem;color:var(--gray-600)}
+
+/* ── INSPECTOR TAGS ── */
+.tag-row{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.5rem}
+.tag{
+  font-size:.68rem;font-weight:500;padding:.2rem .55rem;border-radius:100px;
+  display:inline-flex;align-items:center;gap:.3rem;
+}
+.tag-blue{background:var(--blue-50);color:var(--blue-700);border:1px solid var(--blue-100)}
+.tag-orange{background:var(--orange-100);color:#92400e;border:1px solid #fcd34d}
+.tag-green{background:var(--green-100);color:#166534;border:1px solid #86efac}
+.tag-gray{background:var(--gray-100);color:var(--gray-600);border:1px solid var(--gray-300)}
+
+/* ── INSPECTOR PANEL ── */
+.inspector-grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:.5rem;
+}
+.inspector-stat{
+  background:var(--gray-50);border:1px solid var(--gray-200);
+  border-radius:var(--r);padding:.6rem .75rem;
+}
+.inspector-stat .val{
+  font-size:1.1rem;font-weight:700;color:var(--gray-900);
+  font-family:var(--font-mono);line-height:1.2;
+}
+.inspector-stat .lbl{font-size:.65rem;color:var(--gray-500);margin-top:.2rem}
+
+/* ── BAR MARKER (canvas overlay) ── */
+.bar-marker-panel{
+  background:var(--gray-50);border:1px solid var(--gray-200);
+  border-radius:var(--r);padding:.75rem;margin-top:.75rem;
+}
+.bar-marker-panel h4{font-size:.75rem;font-weight:600;color:var(--gray-800);margin-bottom:.6rem}
+.bar-list{display:flex;flex-direction:column;gap:.4rem;max-height:200px;overflow-y:auto}
+.bar-item{
+  display:flex;align-items:center;gap:.6rem;
+  background:var(--white);border:1px solid var(--gray-200);
+  border-radius:var(--r);padding:.4rem .65rem;font-size:.75rem;
+}
+.bar-item-color{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.bar-item-info{flex:1;color:var(--gray-700)}
+.bar-item-diam{font-family:var(--font-mono);font-size:.7rem;color:var(--gray-500)}
+.bar-item-del{
+  background:none;border:none;cursor:pointer;color:var(--gray-400);
+  font-size:.9rem;padding:0 .2rem;line-height:1;
+}
+.bar-item-del:hover{color:var(--red-500)}
+
+/* ── PHOTO UPLOAD ── */
+.upload-zone{
+  border:2px dashed var(--gray-300);border-radius:var(--r-lg);padding:2rem;
+  text-align:center;cursor:pointer;transition:all .15s;background:var(--gray-50);
+}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--blue-500);background:var(--blue-50)}
+.upload-zone svg{width:32px;height:32px;color:var(--gray-400);margin:0 auto .75rem}
+.upload-zone p{font-size:.8rem;color:var(--gray-600)}
+.upload-zone span{font-size:.72rem;color:var(--gray-500)}
+
+/* ── SPLIT LAYOUT (form + canvas) ── */
+.inspector-layout{
+  display:grid;grid-template-columns:1fr 1.3fr;gap:1.25rem;align-items:start;
+}
+@media(max-width:1100px){.inspector-layout{grid-template-columns:1fr}}
+
+/* ── REPORTS TABLE ── */
+.data-table{width:100%;border-collapse:collapse;font-size:.78rem}
+.data-table th{
+  background:var(--gray-50);color:var(--gray-600);font-weight:600;
+  padding:.5rem .75rem;text-align:left;border-bottom:1px solid var(--gray-200);
+  font-size:.7rem;letter-spacing:.04em;text-transform:uppercase;
+}
+.data-table td{padding:.55rem .75rem;border-bottom:1px solid var(--gray-100);color:var(--gray-800)}
+.data-table tr:hover td{background:var(--gray-50)}
+.data-table .mono{font-family:var(--font-mono);font-size:.72rem}
+
+/* ── SETTINGS ── */
+.settings-row{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:.75rem 0;border-bottom:1px solid var(--gray-100);
+}
+.settings-row:last-child{border-bottom:none}
+.settings-row-label{font-size:.82rem;font-weight:500;color:var(--gray-800)}
+.settings-row-desc{font-size:.72rem;color:var(--gray-500);margin-top:.15rem}
+.settings-input{
+  background:var(--white);border:1px solid var(--gray-300);border-radius:var(--r);
+  color:var(--gray-900);font-family:var(--font-mono);font-size:.78rem;
+  padding:.35rem .6rem;min-width:180px;
+}
+.settings-input:focus{outline:none;border-color:var(--blue-500)}
+
+/* ── TOGGLE ── */
+.toggle-wrap{position:relative;display:inline-block;width:36px;height:20px}
+.toggle-wrap input{opacity:0;width:0;height:0}
+.toggle-track{
+  position:absolute;inset:0;background:var(--gray-300);border-radius:10px;
+  cursor:pointer;transition:background .2s;
+}
+.toggle-thumb{
+  position:absolute;width:16px;height:16px;background:white;border-radius:50%;
+  top:2px;left:2px;transition:transform .2s;pointer-events:none;
+  box-shadow:var(--shadow-sm);
+}
+.toggle-wrap input:checked~.toggle-track{background:var(--blue-500)}
+.toggle-wrap input:checked~.toggle-thumb{transform:translateX(16px)}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);transition:transform .25s}
+  .sidebar.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .inspector-layout{grid-template-columns:1fr}
+  .struct-grid{grid-template-columns:1fr 1fr}
+}
+
+/* ── PROGRESS BAR ── */
+.progress{height:4px;background:var(--gray-200);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;background:var(--blue-500);border-radius:2px;transition:width .3s}
+
+/* ── STEP INDICATOR ── */
+.steps{display:flex;align-items:center;gap:.5rem;margin-bottom:1.5rem}
+.step{
+  display:flex;align-items:center;gap:.4rem;font-size:.75rem;font-weight:500;
+  color:var(--gray-400);
+}
+.step.active{color:var(--blue-600)}
+.step.done{color:var(--green-500)}
+.step-num{
+  width:22px;height:22px;border-radius:50%;border:2px solid currentColor;
+  display:flex;align-items:center;justify-content:center;font-size:.65rem;
+  font-weight:700;flex-shrink:0;
+}
+.step.done .step-num{background:var(--green-500);border-color:var(--green-500);color:white}
+.step.active .step-num{background:var(--blue-500);border-color:var(--blue-500);color:white}
+.step-sep{flex:1;height:1px;background:var(--gray-200);min-width:20px}
+
+/* ── CANVAS PANEL LAYOUT ── */
+.canvas-area{display:flex;flex-direction:column;gap:.75rem}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ TOPBAR ════════════════════ -->
+<div class="topbar">
+  <a class="topbar-logo" href="#">
+    <div class="topbar-logo-mark">
+      <svg viewBox="0 0 18 18"><path d="M2 16V6l7-4 7 4v10H2z"/><rect x="6" y="10" width="6" height="6" fill="rgba(0,0,0,.3)"/></svg>
+    </div>
+    <div>
+      <div class="topbar-logo-text">Struct<span>CAD</span> Pro</div>
+    </div>
+  </a>
+  <div class="topbar-divider"></div>
+  <div class="topbar-title">Inspección Estructural</div>
+  <div class="topbar-spacer"></div>
+  <div class="topbar-badge">v2.0</div>
+  <div class="topbar-user" title="Usuario">JM</div>
+</div>
+
+<!-- ════════════════════ SIDEBAR ════════════════════ -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Principal</div>
+    <a class="sidebar-item active" onclick="showPage('nueva')" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="2"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg>
+      Nueva Inspección
+    </a>
+    <a class="sidebar-item" onclick="showPage('inspector')" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M2 13c0-3 2.7-5 6-5s6 2 6 5"/></svg>
+      Inspector Visual
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Gestión</div>
+    <a class="sidebar-item" onclick="showPage('historial')" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h5"/></svg>
+      Historial
+      <span class="sidebar-count" id="hist-count">0</span>
+    </a>
+    <a class="sidebar-item" onclick="showPage('obra')" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="8" width="10" height="6" rx="1"/><path d="M1 8h14M6 8V5a2 2 0 014 0v3"/></svg>
+      Datos de Obra
+    </a>
+  </div>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Sistema</div>
+    <a class="sidebar-item" onclick="showPage('config')" href="#">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.5"/><path d="M8 2v1.5M8 12.5V14M2 8h1.5M12.5 8H14M4.1 4.1l1 1M10.9 10.9l1 1M10.9 4.1l1-1M4.1 10.9l1-1"/></svg>
+      Configuración
+    </a>
+  </div>
+</nav>
+
+<!-- ════════════════════ MAIN CONTENT ════════════════════ -->
+<main class="main">
+
+<!-- ───── PAGE: NUEVA INSPECCIÓN ───── -->
+<div class="page active" id="page-nueva">
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Nueva Inspección</h1>
+    <p>Seleccione el tipo de elemento, complete los datos y marque la zona inspeccionada</p>
+  </div>
+  <div style="display:flex;gap:.5rem">
+    <button class="btn btn-secondary" onclick="resetForm()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8A6 6 0 0113.8 5.5M14 8a6 6 0 01-11.8 2.5"/><polyline points="14 3 14 6 11 6"/></svg>
+      Limpiar
+    </button>
+    <button class="btn btn-primary btn-lg" id="btnGenerar" onclick="generarDXF()">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 13h10"/></svg>
+      Generar DXF
+    </button>
+  </div>
+</div>
+
+<!-- Pasos -->
+<div class="steps" id="steps">
+  <div class="step active" id="step-1"><div class="step-num">1</div> Tipo de elemento</div>
+  <div class="step-sep"></div>
+  <div class="step" id="step-2"><div class="step-num">2</div> Parámetros</div>
+  <div class="step-sep"></div>
+  <div class="step" id="step-3"><div class="step-num">3</div> Zona picada</div>
+  <div class="step-sep"></div>
+  <div class="step" id="step-4"><div class="step-num">4</div> Generar DXF</div>
+</div>
+
+<!-- Selector tipo estructura -->
+<div class="struct-grid" id="structGrid">
+  <div class="struct-card" onclick="selStruct('pilar-rect')" id="sc-pilar-rect">
+    <div class="struct-card-icon">
+      <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="4" y="3" width="20" height="22" rx="1"/><rect x="8" y="7" width="12" height="14" stroke-dasharray="3 2"/>
+        <circle cx="8" cy="7" r="1.5" fill="currentColor"/><circle cx="20" cy="7" r="1.5" fill="currentColor"/>
+        <circle cx="8" cy="21" r="1.5" fill="currentColor"/><circle cx="20" cy="21" r="1.5" fill="currentColor"/>
+        <circle cx="14" cy="21" r="1.5" fill="currentColor"/>
+      </svg>
+    </div>
+    <h4>Pilar Rectangular</h4>
+    <p>Sección en planta + vistas frontal y lateral</p>
+  </div>
+  <div class="struct-card" onclick="selStruct('pilar-circ')" id="sc-pilar-circ">
+    <div class="struct-card-icon">
+      <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle cx="14" cy="14" r="10"/><circle cx="14" cy="14" r="6" stroke-dasharray="3 2"/>
+        <circle cx="14" cy="8" r="1.5" fill="currentColor"/><circle cx="20" cy="11" r="1.5" fill="currentColor"/>
+        <circle cx="20" cy="17" r="1.5" fill="currentColor"/><circle cx="14" cy="20" r="1.5" fill="currentColor"/>
+        <circle cx="8" cy="17" r="1.5" fill="currentColor"/><circle cx="8" cy="11" r="1.5" fill="currentColor"/>
+      </svg>
+    </div>
+    <h4>Pilar Circular</h4>
+    <p>Sección circular con armadura radial</p>
+  </div>
+  <div class="struct-card" onclick="selStruct('viga')" id="sc-viga">
+    <div class="struct-card-icon">
+      <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="2" y="10" width="24" height="10" rx="1"/><rect x="5" y="12" width="18" height="6" stroke-dasharray="3 2"/>
+        <line x1="5" y1="13" x2="23" y2="13" stroke-width="1.8"/><line x1="5" y1="17" x2="23" y2="17" stroke-dasharray="2 2"/>
+        <line x1="9" y1="12" x2="9" y2="18"/><line x1="14" y1="12" x2="14" y2="18"/><line x1="19" y1="12" x2="19" y2="18"/>
+      </svg>
+    </div>
+    <h4>Viga</h4>
+    <p>Sección transversal + alzado con zona inspeccionada</p>
+  </div>
+  <div class="struct-card" onclick="selStruct('forjado')" id="sc-forjado">
+    <div class="struct-card-icon">
+      <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="2" y="8" width="24" height="8" rx="1"/>
+        <line x1="7" y1="8" x2="7" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="21" y1="8" x2="21" y2="16"/>
+        <line x1="2" y1="12" x2="26" y2="12" stroke-dasharray="3 2"/>
+        <path d="M6 16v4M14 16v4M22 16v4"/>
+      </svg>
+    </div>
+    <h4>Forjado / Losa</h4>
+    <p>Planta de armadura + sección transversal</p>
+  </div>
+  <div class="struct-card" onclick="selStruct('zapata')" id="sc-zapata">
+    <div class="struct-card-icon">
+      <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4">
+        <rect x="2" y="16" width="24" height="9" rx="1"/>
+        <line x1="7" y1="16" x2="7" y2="25"/><line x1="14" y1="16" x2="14" y2="25"/><line x1="21" y1="16" x2="21" y2="25"/>
+        <line x1="2" y1="20" x2="26" y2="20"/><line x1="2" y1="23" x2="26" y2="23"/>
+        <rect x="10" y="5" width="8" height="12" stroke-dasharray="2 1.5"/>
+      </svg>
+    </div>
+    <h4>Zapata Aislada</h4>
+    <p>Armadura en planta + secciones X-X / Y-Y</p>
+  </div>
+  <div class="struct-card" onclick="selStruct('escalera')" id="sc-escalera">
+    <div class="struct-card-icon">
+      <svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.4">
+        <line x1="4" y1="24" x2="4" y2="17"/><line x1="4" y1="17" x2="11" y2="17"/>
+        <line x1="11" y1="17" x2="11" y2="11"/><line x1="11" y1="11" x2="18" y2="11"/>
+        <line x1="18" y1="11" x2="18" y2="5"/><line x1="18" y1="5" x2="25" y2="5"/>
+        <path d="M4 24L25 24" stroke-dasharray="2 1.5"/>
+      </svg>
+    </div>
+    <h4>Escalera / Zanca</h4>
+    <p>Sección inclinada con peldaños y armadura</p>
+  </div>
+</div>
+
+<!-- Formulario + Canvas (se muestra al seleccionar) -->
+<div id="formArea" style="display:none">
+  <div class="inspector-layout">
+
+    <!-- Panel izquierdo: formulario -->
+    <div>
+      <div class="card" id="formCard">
+        <div class="card-header">
+          <div>
+            <h3 id="formCardTitle">Parámetros del elemento</h3>
+            <p id="formCardSub">Complete todos los campos requeridos</p>
+          </div>
+          <div class="tag tag-blue" id="formStructTag">—</div>
+        </div>
+        <div class="card-body">
+          <div class="tabs" id="formTabs">
+            <div class="tab active" onclick="switchTab('geometria')">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="12" rx="1"/></svg>
+              Geometría
+            </div>
+            <div class="tab" onclick="switchTab('armadura')">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="7" x2="12" y2="7"/><line x1="2" y1="4" x2="12" y2="4"/><line x1="2" y1="10" x2="12" y2="10"/></svg>
+              Armadura
+            </div>
+            <div class="tab" onclick="switchTab('inspeccion')">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M7 4v3l2 1.5"/></svg>
+              Inspección
+            </div>
+            <div class="tab" onclick="switchTab('obra')">
+              <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12V6l5-4 5 4v6"/><rect x="5" y="8" width="4" height="4"/></svg>
+              Obra
+            </div>
+          </div>
+          <div id="formPanels"></div>
+        </div>
+        <div class="card-footer">
+          <div class="status-bar">
+            <div class="status-dot idle" id="genDot"></div>
+            <div class="status-text" id="genStatus">Preparado para generar</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel derecho: canvas editor zona picada -->
+    <div class="canvas-area">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h3>Editor de Zona Inspeccionada</h3>
+            <p>Dibuje sobre el esquema la zona picada y marque las barras encontradas</p>
+          </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="canvas-toolbar" id="canvasToolbar">
+          <button class="tool-btn active" id="tool-pick" onclick="setTool('pick')" title="Pintar zona picada">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 11L9 2l2 2-6 9H3v-2z"/></svg>
+            Zona Picada
+          </button>
+          <button class="tool-btn" id="tool-bar" onclick="setTool('bar')" title="Marcar barra encontrada">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="3.5"/><circle cx="7" cy="7" r="1.5" fill="currentColor"/></svg>
+            Marcar Barra
+          </button>
+          <button class="tool-btn" id="tool-stir" onclick="setTool('stir')" title="Marcar estribo">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="10" height="10" rx="1"/></svg>
+            Marcar Estribo
+          </button>
+          <button class="tool-btn" id="tool-crack" onclick="setTool('crack')" title="Marcar fisura">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2l2 4-3 2 4 4"/></svg>
+            Fisura
+          </button>
+          <button class="tool-btn" id="tool-erase" onclick="setTool('erase')" title="Borrar">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3L4 9l-2 2h4l6-6-2-2z"/></svg>
+            Borrar
+          </button>
+          <div class="tool-sep"></div>
+          <div class="brush-sizes">
+            <div class="brush-opt active" onclick="setBrush(8)" id="br-8" title="Pincel pequeño"><div class="brush-dot" style="width:5px;height:5px"></div></div>
+            <div class="brush-opt" onclick="setBrush(16)" id="br-16" title="Pincel medio"><div class="brush-dot" style="width:9px;height:9px"></div></div>
+            <div class="brush-opt" onclick="setBrush(28)" id="br-28" title="Pincel grande"><div class="brush-dot" style="width:14px;height:14px"></div></div>
+          </div>
+          <div class="tool-sep"></div>
+          <button class="tool-btn btn-sm" onclick="undoCanvas()" title="Deshacer">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 7A5 5 0 117 2"/><polyline points="2 3 2 7 6 7"/></svg>
+          </button>
+          <button class="tool-btn btn-sm" onclick="clearCanvas()" title="Limpiar todo" style="color:#ef4444">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/></svg>
+          </button>
+        </div>
+
+        <!-- Canvas -->
+        <div class="canvas-wrapper">
+          <canvas id="mainCanvas" class="canvas-editor" width="600" height="380"
+            onmousedown="canvasDown(event)" onmousemove="canvasMove(event)"
+            onmouseup="canvasUp(event)" onmouseleave="canvasUp(event)"
+            ontouchstart="canvasTouchStart(event)" ontouchmove="canvasTouchMove(event)"
+            ontouchend="canvasUp(event)">
+          </canvas>
+          <div class="canvas-info" id="canvasInfo">Seleccione un tipo de estructura</div>
+        </div>
+
+        <!-- Leyenda -->
+        <div class="canvas-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:rgba(251,146,60,.5);border:1px solid #ea580c"></div>Zona picada</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#1e40af;border-radius:50%"></div>Barra long. Ø20</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#15803d"></div>Estribo Ø6</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#dc2626"></div>Fisura</div>
+        </div>
+      </div>
+
+      <!-- Panel barras marcadas -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Elementos Marcados</h3>
+          <span class="tag tag-gray" id="markedCount">0 marcados</span>
+        </div>
+        <div class="card-body" style="padding:.75rem">
+          <div class="bar-list" id="barList">
+            <div style="font-size:.75rem;color:var(--gray-500);text-align:center;padding:1rem">
+              Use la herramienta "Marcar Barra" para registrar las barras encontradas
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Foto de obra -->
+      <div class="card">
+        <div class="card-header">
+          <h3>Foto de Obra</h3>
+          <span style="font-size:.72rem;color:var(--gray-500)">Opcional — se incluye en el informe</span>
+        </div>
+        <div class="card-body">
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('photoInput').click()"
+            ondragover="event.preventDefault();this.classList.add('drag')"
+            ondrop="handleDrop(event)" ondragleave="this.classList.remove('drag')">
+            <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="28" height="20" rx="3"/><circle cx="21" cy="13" r="3"/><path d="M2 24l8-8 5 5 5-6 8 9"/></svg>
+            <p>Arrastrar foto o <strong>hacer clic</strong></p>
+            <span>JPG, PNG — máx. 10 MB</span>
+          </div>
+          <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="loadPhoto(this)"/>
+          <div id="photoPreview" style="display:none;margin-top:.75rem">
+            <img id="photoImg" style="max-width:100%;border-radius:var(--r);border:1px solid var(--gray-200)"/>
+            <button class="btn btn-secondary btn-sm" style="margin-top:.5rem" onclick="clearPhoto()">Eliminar foto</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ───── PAGE: INSPECTOR VISUAL ───── -->
+<div class="page" id="page-inspector">
+<div class="page-header">
+  <div class="page-header-left">
+    <h1>Inspector Visual</h1>
+    <p>Cargue una foto de la rotura parcial y superponga el esquema de armadura</p>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header"><h3>Superposición foto + esquema</h3></div>
+  <div class="card-body">
+    <div class="alert alert-info">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><line x1="8" y1="6" x2="8" y2="9"/><circle cx="8" cy="11" r=".5" fill="currentColor"/></svg>
+      Cargue una foto de la zona inspeccionada. El sistema superpondrá el esquema paramétrico sobre la imagen para verificar la correspondencia con la armadura real.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <div class="form-section-title">Foto de obra</div>
+        <div class="upload-zone" onclick="document.getElementById('inspPhoto').click()">
+          <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="6" width="28" height="20" rx="3"/><circle cx="21" cy="13" r="3"/><path d="M2 24l8-8 5 5 5-6 8 9"/></svg>
+          <p>Cargar foto de inspección</p>
+        </div>
+        <input type="file" id="inspPhoto" accept="image/*" style="display:none" onchange="loadInspPhoto(this)"/>
+      </div>
+      <div>
+        <div class="form-section-title">Opciones de superposición</div>
+        <div style="display:flex;flex-direction:column;gap:.75rem;margin-top:.25rem">
+          <div class="field"><label>Opacidad esquema <span class="unit">%</span></label><input type="range" id="overlayOpacity" min="10" max="90" value="50" oninput="updateOverlay()"/></div>
+          <div class="field"><label>Escala X</label><input type="number" id="overlayScaleX" value="1.0" step="0.05" min="0.1" max="5" oninput="updateOverlay()"/></div>
+          <div class="field"><label>Escala Y</label><input type="number" id="overlayScaleY" value="1.0" step="0.05" min="0.1" max="5" oninput="updateOverlay()"/></div>
+        </div>
+      </div>
+    </div>
+    <div id="inspCanvasWrap" style="display:none;margin-top:1rem">
+      <div class="canvas-wrapper"><canvas id="inspCanvas" style="width:100%;display:block"></canvas></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ───── PAGE: HISTORIAL ───── -->
+<div class="page" id="page-historial">
+<div class="page-header">
+  <div class="page-header-left"><h1>Historial de Inspecciones</h1><p>Registro de todos los elementos inspeccionados</p></div>
+  <button class="btn btn-secondary" onclick="exportarHistorial()">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 7l3 3 3-3"/><path d="M3 13h10"/></svg>
+    Exportar CSV
+  </button>
+</div>
+<div class="card">
+  <div class="card-header"><h3>Registros</h3><span class="tag tag-blue" id="totalReg">0 registros</span></div>
+  <div style="overflow-x:auto">
+    <table class="data-table">
+      <thead><tr>
+        <th>Ref.</th><th>Tipo</th><th>Fecha</th><th>Obra</th><th>Sección</th><th>Armadura</th><th>Notas</th><th></th>
+      </tr></thead>
+      <tbody id="historialBody">
+        <tr><td colspan="8" style="text-align:center;color:var(--gray-500);padding:2rem">No hay inspecciones registradas</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ───── PAGE: DATOS DE OBRA ───── -->
+<div class="page" id="page-obra">
+<div class="page-header">
+  <div class="page-header-left"><h1>Datos de Obra</h1><p>Información del proyecto que se incluye en todos los planos generados</p></div>
+  <button class="btn btn-primary" onclick="guardarObra()">Guardar</button>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+  <div class="card">
+    <div class="card-header"><h3>Identificación del Proyecto</h3></div>
+    <div class="card-body">
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div class="field"><label>Nombre de la obra</label><input type="text" id="obra-nombre" placeholder="Edificio Residencial C/ Mayor, 14"/></div>
+        <div class="field"><label>Código de obra</label><input type="text" id="obra-codigo" placeholder="OB-2024-0032"/></div>
+        <div class="field"><label>Promotor / Cliente</label><input type="text" id="obra-promotor" placeholder="Promociones XYZ S.L."/></div>
+        <div class="field"><label>Dirección</label><input type="text" id="obra-direccion" placeholder="C/ Mayor, 14 — Barcelona"/></div>
+        <div class="field"><label>Municipio / Provincia</label><input type="text" id="obra-municipio" placeholder="Barcelona"/></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Técnicos y Fechas</h3></div>
+    <div class="card-body">
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        <div class="field"><label>Técnico responsable</label><input type="text" id="obra-tecnico" placeholder="Nombre Apellido"/></div>
+        <div class="field"><label>Nº colegiado</label><input type="text" id="obra-colegiado" placeholder="AR-12345"/></div>
+        <div class="field"><label>Empresa inspectora</label><input type="text" id="obra-empresa" placeholder="StructCAD Ingeniería S.L."/></div>
+        <div class="field"><label>Fecha de inspección</label><input type="date" id="obra-fecha"/></div>
+        <div class="field"><label>Normativa de referencia</label>
+          <select id="obra-normativa">
+            <option>EHE-08 (España)</option>
+            <option>EC2 — Eurocódigo 2</option>
+            <option>ACI 318 (EEUU)</option>
+            <option>Otra</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ───── PAGE: CONFIGURACIÓN ───── -->
+<div class="page" id="page-config">
+<div class="page-header">
+  <div class="page-header-left"><h1>Configuración</h1><p>Parámetros del sistema y conexión con el backend</p></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+  <div class="card">
+    <div class="card-header"><h3>Conexión Backend</h3></div>
+    <div class="card-body">
+      <div class="settings-row">
+        <div><div class="settings-row-label">URL de la API</div><div class="settings-row-desc">Dirección del servidor FastAPI</div></div>
+        <input type="text" id="apiUrl" class="settings-input" value="http://localhost:8000"/>
+      </div>
+      <div class="settings-row" style="padding-top:1rem">
+        <div style="display:flex;align-items:center;gap:.75rem">
+          <div class="status-dot idle" id="apiDot"></div>
+          <span class="status-text" id="apiStatusText">No verificado</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="checkApi()">Verificar conexión</button>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3>Preferencias DXF</h3></div>
+    <div class="card-body">
+      <div class="settings-row">
+        <div><div class="settings-row-label">Escala por defecto</div><div class="settings-row-desc">Escala nominal en el cajetín del plano</div></div>
+        <select id="cfg-escala" class="settings-input">
+          <option>1:20</option><option>1:25</option><option>1:50</option><option>1:10</option>
+        </select>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Unidades</div></div>
+        <select id="cfg-unidades" class="settings-input"><option>Centímetros (cm)</option><option>Milímetros (mm)</option></select>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Incluir cuadro de título</div></div>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="cfg-cajetin" checked/>
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Guardar en historial automáticamente</div></div>
+        <label class="toggle-wrap">
+          <input type="checkbox" id="cfg-autoguardar" checked/>
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</main>
+
+<!-- ══════════════════════════════════════════════════════
+     JAVASCRIPT — LÓGICA COMPLETA
+══════════════════════════════════════════════════════ -->
+<script>
+/* ─── STATE ─── */
+const STATE = {
+  struct: null,
+  tool: 'pick',
+  brushSize: 8,
+  drawing: false,
+  history: [],
+  canvasHistory: [],
+  markers: [],       // {type, x, y, diam, layer}
+  pickedArea: null,  // ImageData snapshot of picked zone
+  obraData: {},
+};
+
+/* ─── NAVIGATION ─── */
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
+  document.getElementById('page-'+id)?.classList.add('active');
+  event.currentTarget?.classList.add('active');
+}
+
+/* ─── STRUCTURE DEFINITIONS ─── */
+const STRUCTS = {
+  'pilar-rect': {
+    label: 'Pilar Rectangular',
+    endpoint: '/generate/pillar-rect',
+    canvasTemplate: drawPilarRect,
+    tabs: {
+      geometria: [
+        { section: 'Sección transversal',
+          fields: [
+            { id:'width',  label:'Ancho (cara frontal)', unit:'cm', type:'number', min:15, max:300, step:1, val:88 },
+            { id:'depth',  label:'Canto (cara lateral)', unit:'cm', type:'number', min:15, max:300, step:1, val:68 },
+          ]
+        }
+      ],
+      armadura: [
+        { section: 'Cara frontal',
+          fields: [
+            { id:'bars_front_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:16, step:1, val:5 },
+            { id:'bars_front_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6,  max:40, step:2, val:20 },
+            { id:'cover_front',      label:'Recubrimiento', unit:'cm', type:'number', min:1, max:12, step:.5, val:5 },
+          ]
+        },
+        { section: 'Cara lateral',
+          fields: [
+            { id:'bars_lateral_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:16, step:1, val:4 },
+            { id:'bars_lateral_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6,  max:40, step:2, val:20 },
+            { id:'cover_lateral',      label:'Recubrimiento', unit:'cm', type:'number', min:1, max:12, step:.5, val:6 },
+          ]
+        },
+        { section: 'Estribos',
+          fields: [
+            { id:'stirrup_diam',    label:'Ø estribo',     unit:'mm', type:'number', min:4, max:20, step:2, val:6 },
+            { id:'stirrup_spacing', label:'Separación', unit:'cm', type:'number', min:5, max:50, step:5, val:15 },
+          ]
+        }
+      ],
+      inspeccion: [
+        { section: 'Zona inspeccionada',
+          fields: [
+            { id:'inspection_height', label:'Altura zona picada', unit:'cm', type:'number', min:5, max:150, step:1, val:25 },
+            { id:'rebar_found',       label:'¿Se encontró armadura?', type:'select', opts:['Sí','No','Parcialmente'], val:'Sí' },
+            { id:'cover_measured',    label:'Recubrimiento medido', unit:'cm', type:'number', min:0, max:20, step:.5, val:5 },
+            { id:'corrosion',         label:'Estado armadura', type:'select', opts:['Sin patologías','Corrosión leve','Corrosión severa','Armadura seccionada'], val:'Sin patologías' },
+          ]
+        },
+        { section: 'Observaciones',
+          fields: [
+            { id:'notes', label:'Notas técnicas', type:'textarea', val:'' },
+            { id:'anomalies', label:'Anomalías detectadas', type:'textarea', val:'' },
+          ]
+        }
+      ],
+      obra: [
+        { section: 'Identificación del elemento',
+          fields: [
+            { id:'element_id',   label:'Referencia del elemento', type:'text', val:'P-01' },
+            { id:'planta',       label:'Planta / Nivel',          type:'text', val:'PB' },
+            { id:'eje',          label:'Eje / Alineación',        type:'text', val:'A-3' },
+            { id:'fecha_insp',   label:'Fecha inspección',        type:'date', val:'' },
+          ]
+        }
+      ]
+    }
+  },
+  'pilar-circ': {
+    label: 'Pilar Circular',
+    endpoint: '/generate/pillar-circ',
+    canvasTemplate: drawPilarCirc,
+    tabs: {
+      geometria: [
+        { section: 'Sección', fields: [
+          { id:'diameter', label:'Diámetro', unit:'cm', type:'number', min:20, max:300, step:1, val:50 },
+        ]}
+      ],
+      armadura: [
+        { section: 'Armadura longitudinal', fields: [
+          { id:'bars_count', label:'Nº barras', unit:'ud', type:'number', min:4, max:16, step:1, val:8 },
+          { id:'bars_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6, max:40, step:2, val:20 },
+          { id:'cover',      label:'Recubrimiento', unit:'cm', type:'number', min:1, max:12, step:.5, val:4 },
+          { id:'stirrup_diam', label:'Ø espiral', unit:'mm', type:'number', min:4, max:20, step:2, val:8 },
+          { id:'stirrup_spacing', label:'Paso espiral', unit:'cm', type:'number', min:5, max:30, step:5, val:10 },
+        ]}
+      ],
+      inspeccion: [
+        { section: 'Inspección', fields: [
+          { id:'inspection_height', label:'Altura zona picada', unit:'cm', type:'number', min:5, max:150, step:1, val:25 },
+          { id:'rebar_found', label:'Armadura encontrada', type:'select', opts:['Sí','No','Parcialmente'], val:'Sí' },
+          { id:'cover_measured', label:'Recubrimiento medido', unit:'cm', type:'number', min:0, max:20, step:.5, val:4 },
+          { id:'notes', label:'Notas', type:'textarea', val:'' },
+        ]}
+      ],
+      obra: [
+        { section: 'Identificación', fields: [
+          { id:'element_id', label:'Referencia', type:'text', val:'PC-01' },
+          { id:'planta', label:'Planta', type:'text', val:'PB' },
+          { id:'eje', label:'Eje', type:'text', val:'B-2' },
+          { id:'fecha_insp', label:'Fecha', type:'date', val:'' },
+        ]}
+      ]
+    }
+  },
+  'viga': {
+    label: 'Viga',
+    endpoint: '/generate/beam',
+    canvasTemplate: drawViga,
+    tabs: {
+      geometria: [{ section: 'Sección', fields: [
+        { id:'width',  label:'Ancho',  unit:'cm', type:'number', min:15, max:150, step:1, val:30 },
+        { id:'height', label:'Canto',  unit:'cm', type:'number', min:20, max:300, step:1, val:60 },
+        { id:'span',   label:'Luz total', unit:'cm', type:'number', min:100, max:2000, step:10, val:600 },
+      ]}],
+      armadura: [
+        { section: 'Armadura inferior (tracción)', fields: [
+          { id:'bars_bottom_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:10, step:1, val:4 },
+          { id:'bars_bottom_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6, max:40, step:2, val:20 },
+        ]},
+        { section: 'Armadura superior (compresión)', fields: [
+          { id:'bars_top_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:6, step:1, val:2 },
+          { id:'bars_top_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6, max:40, step:2, val:16 },
+        ]},
+        { section: 'Estribos', fields: [
+          { id:'cover', label:'Recubrimiento', unit:'cm', type:'number', min:1, max:10, step:.5, val:3 },
+          { id:'stirrup_diam', label:'Ø estribo', unit:'mm', type:'number', min:4, max:20, step:2, val:8 },
+          { id:'stirrup_spacing', label:'Separación', unit:'cm', type:'number', min:5, max:50, step:5, val:15 },
+        ]}
+      ],
+      inspeccion: [{ section: 'Inspección', fields: [
+        { id:'inspection_length', label:'Long. zona picada', unit:'cm', type:'number', min:10, max:300, step:5, val:60 },
+        { id:'rebar_found', label:'Armadura', type:'select', opts:['Sí','No','Parcialmente'], val:'Sí' },
+        { id:'cover_measured', label:'Recubrimiento medido', unit:'cm', type:'number', min:0, max:20, step:.5, val:3 },
+        { id:'corrosion', label:'Estado', type:'select', opts:['Sin patologías','Corrosión leve','Corrosión severa'], val:'Sin patologías' },
+        { id:'notes', label:'Notas', type:'textarea', val:'' },
+      ]}],
+      obra: [{ section: 'Identificación', fields: [
+        { id:'element_id', label:'Referencia', type:'text', val:'V-01' },
+        { id:'planta', label:'Planta', type:'text', val:'P1' },
+        { id:'eje', label:'Eje', type:'text', val:'1-2 / A' },
+        { id:'fecha_insp', label:'Fecha', type:'date', val:'' },
+      ]}]
+    }
+  },
+  'forjado': {
+    label: 'Forjado / Losa',
+    endpoint: '/generate/forjado',
+    canvasTemplate: drawForjado,
+    tabs: {
+      geometria: [{ section: 'Dimensiones', fields: [
+        { id:'thickness', label:'Canto total', unit:'cm', type:'number', min:10, max:60, step:1, val:25 },
+        { id:'span_x', label:'Luz dirección X', unit:'cm', type:'number', min:100, max:1500, step:10, val:500 },
+        { id:'span_y', label:'Luz dirección Y', unit:'cm', type:'number', min:100, max:1500, step:10, val:400 },
+        { id:'forjado_type', label:'Tipo', type:'select', opts:['Losa maciza','Losa aligerada','Forjado reticular','Losa prefabricada'], val:'Losa maciza' },
+      ]}],
+      armadura: [
+        { section: 'Armadura dirección X', fields: [
+          { id:'bars_x_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:30, step:1, val:10 },
+          { id:'bars_x_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6, max:32, step:2, val:12 },
+          { id:'bars_x_spacing', label:'Separación', unit:'cm', type:'number', min:5, max:30, step:5, val:15 },
+        ]},
+        { section: 'Armadura dirección Y', fields: [
+          { id:'bars_y_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:30, step:1, val:10 },
+          { id:'bars_y_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6, max:32, step:2, val:12 },
+          { id:'bars_y_spacing', label:'Separación', unit:'cm', type:'number', min:5, max:30, step:5, val:15 },
+        ]},
+        { section: 'Recubrimientos', fields: [
+          { id:'cover_bottom', label:'Recub. inferior', unit:'cm', type:'number', min:2, max:10, step:.5, val:3 },
+          { id:'cover_top',    label:'Recub. superior', unit:'cm', type:'number', min:2, max:10, step:.5, val:3 },
+        ]}
+      ],
+      inspeccion: [{ section: 'Inspección', fields: [
+        { id:'inspection_area', label:'Área inspeccionada', unit:'cm²', type:'number', min:50, max:5000, step:50, val:400 },
+        { id:'rebar_found', label:'Armadura encontrada', type:'select', opts:['Sí','No','Parcialmente'], val:'Sí' },
+        { id:'cover_measured', label:'Recubrimiento medido', unit:'cm', type:'number', min:0, max:20, step:.5, val:3 },
+        { id:'notes', label:'Notas', type:'textarea', val:'' },
+      ]}],
+      obra: [{ section: 'Identificación', fields: [
+        { id:'element_id', label:'Referencia', type:'text', val:'F-01' },
+        { id:'planta', label:'Planta', type:'text', val:'P1' },
+        { id:'paño', label:'Paño', type:'text', val:'A3-B4' },
+        { id:'fecha_insp', label:'Fecha', type:'date', val:'' },
+      ]}]
+    }
+  },
+  'zapata': {
+    label: 'Zapata Aislada',
+    endpoint: '/generate/footing',
+    canvasTemplate: drawZapata,
+    tabs: {
+      geometria: [{ section: 'Dimensiones', fields: [
+        { id:'length', label:'Longitud', unit:'cm', type:'number', min:50, max:600, step:5, val:200 },
+        { id:'width',  label:'Anchura',  unit:'cm', type:'number', min:50, max:600, step:5, val:160 },
+        { id:'height', label:'Canto',    unit:'cm', type:'number', min:30, max:200, step:5, val:60 },
+        { id:'pedestal_w', label:'Pilar ancho', unit:'cm', type:'number', min:20, max:100, step:5, val:40 },
+        { id:'pedestal_d', label:'Pilar canto', unit:'cm', type:'number', min:20, max:100, step:5, val:40 },
+      ]}],
+      armadura: [
+        { section: 'Armadura dir. X (paralela al lado largo)', fields: [
+          { id:'bars_x_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:20, step:1, val:8 },
+          { id:'bars_x_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6, max:40, step:2, val:16 },
+        ]},
+        { section: 'Armadura dir. Y', fields: [
+          { id:'bars_y_count', label:'Nº barras', unit:'ud', type:'number', min:2, max:20, step:1, val:7 },
+          { id:'bars_y_diam',  label:'Ø barras',  unit:'mm', type:'number', min:6, max:40, step:2, val:16 },
+        ]},
+        { section: 'Recubrimientos', fields: [
+          { id:'cover_bottom', label:'Recub. inferior', unit:'cm', type:'number', min:3, max:15, step:.5, val:7 },
+          { id:'cover_sides',  label:'Recub. lateral',  unit:'cm', type:'number', min:3, max:15, step:.5, val:7 },
+        ]}
+      ],
+      inspeccion: [{ section: 'Inspección', fields: [
+        { id:'rebar_found', label:'Armadura', type:'select', opts:['Sí','No','Parcialmente'], val:'Sí' },
+        { id:'cover_measured', label:'Recubrimiento medido', unit:'cm', type:'number', min:0, max:20, step:.5, val:7 },
+        { id:'notes', label:'Notas', type:'textarea', val:'' },
+      ]}],
+      obra: [{ section: 'Identificación', fields: [
+        { id:'element_id', label:'Referencia', type:'text', val:'Z-01' },
+        { id:'planta', label:'Nivel', type:'text', val:'Cimentación' },
+        { id:'eje', label:'Pilar asociado', type:'text', val:'P-01' },
+        { id:'fecha_insp', label:'Fecha', type:'date', val:'' },
+      ]}]
+    }
+  },
+  'escalera': {
+    label: 'Escalera / Zanca',
+    endpoint: '/generate/stair',
+    canvasTemplate: drawEscalera,
+    tabs: {
+      geometria: [{ section: 'Geometría de zanca', fields: [
+        { id:'stair_width',    label:'Ancho escalera',   unit:'cm', type:'number', min:80, max:300, step:5, val:120 },
+        { id:'riser',          label:'Contrahuella',     unit:'cm', type:'number', min:14, max:22, step:.5, val:17 },
+        { id:'tread',          label:'Huella',           unit:'cm', type:'number', min:25, max:35, step:.5, val:28 },
+        { id:'slab_thickness', label:'Canto zanca',      unit:'cm', type:'number', min:10, max:30, step:1, val:15 },
+        { id:'wall_thickness', label:'Espesor pared peldaño', unit:'cm', type:'number', min:5, max:15, step:.5, val:6.5 },
+        { id:'steps_count',    label:'Número de peldaños', unit:'ud', type:'number', min:3, max:25, step:1, val:10 },
+      ]}],
+      armadura: [{ section: 'Armadura', fields: [
+        { id:'bars_long_diam',  label:'Ø barras long.',  unit:'mm', type:'number', min:6, max:20, step:2, val:12 },
+        { id:'bars_long_sep',   label:'Separación long.',unit:'cm', type:'number', min:10, max:30, step:5, val:15 },
+        { id:'bars_trans_diam', label:'Ø barras trans.', unit:'mm', type:'number', min:6, max:16, step:2, val:8 },
+        { id:'bars_trans_sep',  label:'Separación trans.',unit:'cm',type:'number', min:10, max:30, step:5, val:20 },
+        { id:'cover',           label:'Recubrimiento',   unit:'cm', type:'number', min:1.5, max:6, step:.5, val:2.5 },
+      ]}],
+      inspeccion: [{ section: 'Inspección', fields: [
+        { id:'rebar_found', label:'Armadura encontrada', type:'select', opts:['Sí','No','Parcialmente'], val:'No' },
+        { id:'cover_measured', label:'Recubrimiento medido', unit:'cm', type:'number', min:0, max:20, step:.5, val:2.5 },
+        { id:'relleno_type', label:'Tipo de relleno peldaño', type:'select', opts:['Mortero/Cascote','Hormigón','Sin datos'], val:'Mortero/Cascote' },
+        { id:'depth_no_rebar', label:'Prof. sin armadura', unit:'cm', type:'number', min:0, max:30, step:.5, val:10 },
+        { id:'notes', label:'Notas', type:'textarea', val:'' },
+      ]}],
+      obra: [{ section: 'Identificación', fields: [
+        { id:'element_id', label:'Referencia', type:'text', val:'ESC-01' },
+        { id:'planta', label:'Tramo', type:'text', val:'PB-P1' },
+        { id:'fecha_insp', label:'Fecha', type:'date', val:'' },
+      ]}]
+    }
+  }
+};
+
+/* ─── STRUCTURE SELECT ─── */
+let currentTab = 'geometria';
+function selStruct(id) {
+  STATE.struct = id;
+  document.querySelectorAll('.struct-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('sc-'+id)?.classList.add('active');
+  const def = STRUCTS[id];
+  document.getElementById('formArea').style.display = 'block';
+  document.getElementById('formCardTitle').textContent = def.label;
+  document.getElementById('formStructTag').textContent = def.label;
+  setStep(2);
+  currentTab = 'geometria';
+  renderFormTabs(id);
+  renderCanvas(id);
+  updateMarkedCount();
+}
+
+function renderFormTabs(id) {
+  const def = STRUCTS[id];
+  const tabNames = { geometria:'Geometría', armadura:'Armadura', inspeccion:'Inspección', obra:'Obra' };
+  const tabIcons = {
+    geometria:'<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="12" height="12" rx="1"/></svg>',
+    armadura:'<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="2" y1="7" x2="12" y2="7"/><line x1="2" y1="4" x2="12" y2="4"/><line x1="2" y1="10" x2="12" y2="10"/></svg>',
+    inspeccion:'<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M7 4v3l2 1.5"/></svg>',
+    obra:'<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12V6l5-4 5 4v6"/><rect x="5" y="8" width="4" height="4"/></svg>'
+  };
+  const tabsEl = document.getElementById('formTabs');
+  tabsEl.innerHTML = Object.keys(def.tabs).map(k =>
+    `<div class="tab${k===currentTab?' active':''}" onclick="switchTab('${k}')">${tabIcons[k]} ${tabNames[k]}</div>`
+  ).join('');
+  renderTabPanel(id, currentTab);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  renderFormTabs(STATE.struct);
+}
+
+function renderTabPanel(id, tab) {
+  const sections = STRUCTS[id].tabs[tab] || [];
+  let html = `<div class="tab-panel active">`;
+  for (const sec of sections) {
+    html += `<div class="form-section"><div class="form-section-title">${sec.section}</div><div class="fields-grid">`;
+    for (const f of sec.fields) {
+      html += renderField(f);
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  document.getElementById('formPanels').innerHTML = html;
+  // Set today's date on date fields if empty
+  document.querySelectorAll('input[type=date]').forEach(d => { if(!d.value) d.value = new Date().toISOString().split('T')[0]; });
+}
+
+function renderField(f) {
+  const unit = f.unit ? `<span class="unit">(${f.unit})</span>` : '';
+  if (f.type === 'textarea') return `<div class="field" style="grid-column:1/-1"><label for="${f.id}">${f.label}</label><textarea id="${f.id}" rows="3">${f.val||''}</textarea></div>`;
+  if (f.type === 'select') return `<div class="field"><label for="${f.id}">${f.label}</label><select id="${f.id}">${(f.opts||[]).map(o=>`<option${o===f.val?' selected':''}>${o}</option>`).join('')}</select></div>`;
+  if (f.type === 'date') return `<div class="field"><label for="${f.id}">${f.label}</label><input type="date" id="${f.id}" value="${f.val||''}"/></div>`;
+  if (f.type === 'text') return `<div class="field"><label for="${f.id}">${f.label} ${unit}</label><input type="text" id="${f.id}" value="${f.val||''}"/></div>`;
+  return `<div class="field"><label for="${f.id}">${f.label} ${unit}</label><input type="number" id="${f.id}" min="${f.min||''}" max="${f.max||''}" step="${f.step||1}" value="${f.val??''}"/></div>`;
+}
+
+/* ─── STEPS ─── */
+function setStep(n) {
+  for (let i=1;i<=4;i++) {
+    const el = document.getElementById('step-'+i);
+    el.classList.remove('active','done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('active');
+  }
+}
+
+/* ─── CANVAS TEMPLATES ─── */
+const CV = document.getElementById('mainCanvas');
+const CTX = CV.getContext('2d');
+
+function getScale() {
+  if (!STATE.struct) return 1;
+  const params = getParams();
+  const W = parseFloat(params.width || params.diameter || 88);
+  const D = parseFloat(params.depth || params.diameter || 68);
+  const maxDim = Math.max(W, D, 100);
+  return Math.min((CV.width * 0.45) / maxDim, 2.8);
+}
+
+function renderCanvas(id) {
+  CTX.clearRect(0, 0, CV.width, CV.height);
+  const fn = STRUCTS[id]?.canvasTemplate;
+  if (fn) fn();
+  saveCanvasState();
+  document.getElementById('canvasInfo').textContent = `Plantilla: ${STRUCTS[id]?.label} — Zona picada: 0%`;
+}
+
+/* Canvas templates — draw the base structural schema */
+function drawPilarRect() {
+  const p = getParams();
+  const W = parseFloat(p.width)||88, D = parseFloat(p.depth)||68;
+  const cf = parseFloat(p.cover_front)||5, cl = parseFloat(p.cover_lateral)||6;
+  const nbf = parseInt(p.bars_front_count)||5, nbl = parseInt(p.bars_lateral_count)||4;
+  const sc = Math.min((CV.width*0.55)/W, (CV.height*0.72)/D);
+  const ox = (CV.width - W*sc)/2, oy = (CV.height - D*sc)/2;
+
+  // Background
+  CTX.fillStyle='#f1f3f5'; CTX.fillRect(0,0,CV.width,CV.height);
+  // Concrete fill
+  CTX.fillStyle='#d0ccc4'; CTX.fillRect(ox,oy,W*sc,D*sc);
+  // Concrete texture (random dots)
+  CTX.fillStyle='#b8b3aa';
+  for(let i=0;i<60;i++) CTX.fillRect(ox+Math.random()*W*sc, oy+Math.random()*D*sc, 2, 2);
+  // Outer border
+  CTX.strokeStyle='#333'; CTX.lineWidth=2; CTX.strokeRect(ox,oy,W*sc,D*sc);
+  // Stirrup
+  const sx=ox+cf*sc, sy=oy+cl*sc, sw=W*sc-2*cf*sc, sh=D*sc-2*cl*sc;
+  CTX.strokeStyle='#15803d'; CTX.lineWidth=2;
+  roundedRect(sx, sy, sw, sh, 5*sc*0.3);
+  // Bars — front (bottom row)
+  const spf = (W-2*cf)/(nbf-1||1);
+  for(let i=0;i<nbf;i++) {
+    const bx=ox+cf*sc+i*spf*sc, by=oy+cf*sc;
+    drawBar(bx, by, 0.4*sc);
+  }
+  // Bars — lateral (left col)
+  const spl = (D-2*cl)/(nbl-1||1);
+  for(let i=0;i<nbl;i++) {
+    const bx=ox+cl*sc, by=oy+cl*sc+i*spl*sc;
+    drawBar(bx, by, 0.4*sc);
+  }
+  // Labels
+  drawLabel(ox+W*sc/2, oy-12, `${W} cm`);
+  drawLabel(ox+W*sc+10, oy+D*sc/2, `${D} cm`, true);
+  // Dim lines
+  drawDimH(ox, oy-8, W*sc);
+  drawDimV(ox+W*sc+6, oy, D*sc);
+}
+
+function drawPilarCirc() {
+  const p = getParams();
+  const diam = parseFloat(p.diameter)||50;
+  const R = diam/2, cov = parseFloat(p.cover)||4, nb = parseInt(p.bars_count)||8;
+  const sc = Math.min((CV.width*0.5)/diam, (CV.height*0.65)/diam);
+  const cx = CV.width/2, cy = CV.height/2;
+
+  CTX.fillStyle='#f1f3f5'; CTX.fillRect(0,0,CV.width,CV.height);
+  CTX.fillStyle='#d0ccc4'; CTX.beginPath(); CTX.arc(cx,cy,R*sc,0,Math.PI*2); CTX.fill();
+  for(let i=0;i<40;i++) {
+    const a=Math.random()*Math.PI*2, r=Math.random()*R*sc;
+    CTX.fillStyle='#b8b3aa'; CTX.fillRect(cx+r*Math.cos(a), cy+r*Math.sin(a), 2, 2);
+  }
+  CTX.strokeStyle='#333'; CTX.lineWidth=2; CTX.beginPath(); CTX.arc(cx,cy,R*sc,0,Math.PI*2); CTX.stroke();
+  // Stirrup circle
+  CTX.strokeStyle='#15803d'; CTX.lineWidth=2; CTX.setLineDash([4,3]);
+  CTX.beginPath(); CTX.arc(cx,cy,(R-cov)*sc,0,Math.PI*2); CTX.stroke(); CTX.setLineDash([]);
+  // Bars
+  for(let i=0;i<nb;i++) {
+    const ang = (2*Math.PI*i/nb) - Math.PI/2;
+    drawBar(cx+(R-cov)*sc*Math.cos(ang), cy+(R-cov)*sc*Math.sin(ang), 0.4*sc);
+  }
+  drawLabel(cx, cy+R*sc+16, `Ø ${diam} cm`);
+  drawDimH(cx-R*sc, cy+R*sc+6, diam*sc);
+}
+
+function drawViga() {
+  const p = getParams();
+  const W = parseFloat(p.width)||30, H = parseFloat(p.height)||60;
+  const cov = parseFloat(p.cover)||3;
+  const nbb = parseInt(p.bars_bottom_count)||4, nbt = parseInt(p.bars_top_count)||2;
+  const sc = Math.min((CV.width*0.5)/W, (CV.height*0.72)/H);
+  const ox = (CV.width - W*sc)/2, oy = (CV.height - H*sc)/2;
+
+  CTX.fillStyle='#f1f3f5'; CTX.fillRect(0,0,CV.width,CV.height);
+  CTX.fillStyle='#d0ccc4'; CTX.fillRect(ox,oy,W*sc,H*sc);
+  for(let i=0;i<40;i++) CTX.fillStyle='#b8b3aa', CTX.fillRect(ox+Math.random()*W*sc, oy+Math.random()*H*sc, 2, 2);
+  CTX.strokeStyle='#333'; CTX.lineWidth=2; CTX.strokeRect(ox,oy,W*sc,H*sc);
+  // Stirrup
+  CTX.strokeStyle='#15803d'; CTX.lineWidth=2;
+  roundedRect(ox+cov*sc, oy+cov*sc, W*sc-2*cov*sc, H*sc-2*cov*sc, 3);
+  // Bottom bars
+  const spb = (W-2*cov)/(nbb-1||1);
+  for(let i=0;i<nbb;i++) drawBar(ox+cov*sc+i*spb*sc, oy+H*sc-cov*sc, 0.4*sc);
+  // Top bars
+  const spt = (W-2*cov)/(nbt-1||1);
+  for(let i=0;i<nbt;i++) drawBar(ox+cov*sc+i*spt*sc, oy+cov*sc, 0.4*sc);
+  drawLabel(ox+W*sc/2, oy-12, `${W} cm`); drawLabel(ox+W*sc+10, oy+H*sc/2, `${H} cm`, true);
+  drawDimH(ox, oy-8, W*sc); drawDimV(ox+W*sc+6, oy, H*sc);
+}
+
+function drawForjado() {
+  const p = getParams();
+  const th = parseFloat(p.thickness)||25;
+  const sc = Math.min((CV.width*0.7)/200, 2);
+  const W=200*sc, H=th*sc, ox=(CV.width-W)/2, oy=(CV.height-H)/2;
+  CTX.fillStyle='#f1f3f5'; CTX.fillRect(0,0,CV.width,CV.height);
+  CTX.fillStyle='#d0ccc4'; CTX.fillRect(ox,oy,W,H);
+  for(let i=0;i<50;i++) CTX.fillStyle='#b8b3aa', CTX.fillRect(ox+Math.random()*W, oy+Math.random()*H, 2, 2);
+  CTX.strokeStyle='#333'; CTX.lineWidth=2; CTX.strokeRect(ox,oy,W,H);
+  const cov = parseFloat(p.cover_bottom||3)*sc;
+  const nb = parseInt(p.bars_x_count||10);
+  const sp = W/(nb+1);
+  for(let i=1;i<=nb;i++) drawBar(ox+i*sp, oy+H-cov, 0.35*sc);
+  for(let i=1;i<=nb;i++) drawBar(ox+i*sp, oy+cov, 0.35*sc);
+  drawLabel(ox+W/2, oy-12, `Sección — e=${th}cm`);
+  drawDimV(ox+W+6, oy, H);
+}
+
+function drawZapata() {
+  const p = getParams();
+  const L=parseFloat(p.length||200), W=parseFloat(p.width||160), H=parseFloat(p.height||60);
+  const pw=parseFloat(p.pedestal_w||40), pd=parseFloat(p.pedestal_d||40);
+  const sc = Math.min((CV.width*0.6)/L, (CV.height*0.5)/H);
+  const ox=(CV.width-L*sc)/2, oy=CV.height*0.6-H*sc;
+  CTX.fillStyle='#f1f3f5'; CTX.fillRect(0,0,CV.width,CV.height);
+  // Zapata
+  CTX.fillStyle='#d0ccc4'; CTX.fillRect(ox,oy,L*sc,H*sc);
+  for(let i=0;i<60;i++) CTX.fillStyle='#b8b3aa', CTX.fillRect(ox+Math.random()*L*sc, oy+Math.random()*H*sc, 2, 2);
+  CTX.strokeStyle='#333'; CTX.lineWidth=2; CTX.strokeRect(ox,oy,L*sc,H*sc);
+  // Pedestal (pilar)
+  const pcx=ox+(L-pw)*sc/2, pcy=oy-10;
+  CTX.fillStyle='#b8b3aa'; CTX.fillRect(pcx,pcy,pw*sc,10+5);
+  CTX.strokeRect(pcx,pcy,pw*sc,10+5);
+  // Bars
+  const cs=parseFloat(p.cover_sides||7), cb=parseFloat(p.cover_bottom||7);
+  const nx=parseInt(p.bars_x_count||8), ny=parseInt(p.bars_y_count||7);
+  const spx=(L-2*cs)/(nx-1||1);
+  for(let i=0;i<nx;i++) drawBar(ox+(cs+i*spx)*sc, oy+(H-cb)*sc, 0.3*sc);
+  drawLabel(ox+L*sc/2, oy-20, `${L}×${W}×${H} cm`);
+  drawDimH(ox, oy+H*sc+6, L*sc); drawDimV(ox+L*sc+6, oy, H*sc);
+}
+
+function drawEscalera() {
+  const p = getParams();
+  const riser=parseFloat(p.riser||17), tread=parseFloat(p.tread||28);
+  const th=parseFloat(p.slab_thickness||15);
+  const n=Math.min(parseInt(p.steps_count||4),5);
+  const sc=Math.min((CV.width*0.65)/(n*tread), (CV.height*0.65)/(n*riser+th*2));
+  const ox=40, oy=CV.height-60;
+  CTX.fillStyle='#f1f3f5'; CTX.fillRect(0,0,CV.width,CV.height);
+  // Draw steps
+  for(let i=0;i<n;i++) {
+    const x=ox+i*tread*sc, y=oy-i*riser*sc;
+    CTX.fillStyle='#d0ccc4'; CTX.fillRect(x,y-riser*sc,tread*sc,riser*sc);
+    CTX.strokeStyle='#333'; CTX.lineWidth=1.5; CTX.strokeRect(x,y-riser*sc,tread*sc,riser*sc);
+  }
+  // Zanca slab
+  CTX.fillStyle='#c0bcb4';
+  CTX.beginPath();
+  CTX.moveTo(ox, oy);
+  CTX.lineTo(ox+n*tread*sc, oy-n*riser*sc);
+  CTX.lineTo(ox+n*tread*sc, oy-n*riser*sc+th*sc);
+  CTX.lineTo(ox, oy+th*sc);
+  CTX.closePath(); CTX.fill();
+  CTX.strokeStyle='#333'; CTX.lineWidth=2; CTX.stroke();
+  // Cover line
+  const cov=parseFloat(p.cover||2.5)*sc;
+  CTX.strokeStyle='#2563eb'; CTX.lineWidth=1; CTX.setLineDash([4,3]);
+  CTX.beginPath(); CTX.moveTo(ox+cov, oy+cov); CTX.lineTo(ox+n*tread*sc-cov, oy-n*riser*sc+cov); CTX.stroke(); CTX.setLineDash([]);
+  // Dim
+  drawLabel(ox+n*tread*sc/2, oy-n*riser*sc-20, `Contrah: ${riser}cm / Huella: ${tread}cm`);
+  drawLabel(80, oy-40, `Canto zanca: ${p.slab_thickness||15}cm`);
+}
+
+/* ─── CANVAS HELPERS ─── */
+function drawBar(x, y, r) {
+  CTX.beginPath(); CTX.arc(x, y, r, 0, Math.PI*2);
+  CTX.fillStyle='#1e40af'; CTX.fill();
+  CTX.strokeStyle='#fff'; CTX.lineWidth=.6; CTX.stroke();
+}
+function roundedRect(x,y,w,h,r) {
+  CTX.beginPath();
+  CTX.moveTo(x+r,y); CTX.lineTo(x+w-r,y); CTX.arcTo(x+w,y,x+w,y+r,r);
+  CTX.lineTo(x+w,y+h-r); CTX.arcTo(x+w,y+h,x+w-r,y+h,r);
+  CTX.lineTo(x+r,y+h); CTX.arcTo(x,y+h,x,y+h-r,r);
+  CTX.lineTo(x,y+r); CTX.arcTo(x,y,x+r,y,r);
+  CTX.closePath(); CTX.stroke();
+}
+function drawLabel(x,y,txt,vert=false) {
+  CTX.save(); CTX.font='600 11px Inter,sans-serif'; CTX.fillStyle='#343a40';
+  CTX.textAlign='center'; CTX.textBaseline='middle';
+  if(vert){CTX.translate(x,y);CTX.rotate(-Math.PI/2);CTX.fillText(txt,0,0);}
+  else CTX.fillText(txt,x,y);
+  CTX.restore();
+}
+function drawDimH(x,y,w) {
+  CTX.strokeStyle='#6c757d'; CTX.lineWidth=.8;
+  CTX.beginPath(); CTX.moveTo(x,y); CTX.lineTo(x+w,y); CTX.stroke();
+  CTX.beginPath(); CTX.moveTo(x,y-4); CTX.lineTo(x,y+4); CTX.stroke();
+  CTX.beginPath(); CTX.moveTo(x+w,y-4); CTX.lineTo(x+w,y+4); CTX.stroke();
+}
+function drawDimV(x,y,h) {
+  CTX.strokeStyle='#6c757d'; CTX.lineWidth=.8;
+  CTX.beginPath(); CTX.moveTo(x,y); CTX.lineTo(x,y+h); CTX.stroke();
+  CTX.beginPath(); CTX.moveTo(x-4,y); CTX.lineTo(x+4,y); CTX.stroke();
+  CTX.beginPath(); CTX.moveTo(x-4,y+h); CTX.lineTo(x+4,y+h); CTX.stroke();
+}
+
+/* ─── CANVAS DRAWING TOOLS ─── */
+function setTool(t) {
+  STATE.tool = t;
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tool-'+t)?.classList.add('active');
+  CV.style.cursor = t==='erase'?'cell':t==='bar'||t==='stir'?'crosshair':'crosshair';
+}
+function setBrush(s) {
+  STATE.brushSize=s;
+  document.querySelectorAll('.brush-opt').forEach(b=>b.classList.remove('active'));
+  document.getElementById('br-'+s)?.classList.add('active');
+}
+
+function getCanvasPos(e) {
+  const rect = CV.getBoundingClientRect();
+  const scaleX = CV.width / rect.width, scaleY = CV.height / rect.height;
+  const src = e.touches ? e.touches[0] : e;
+  return { x: (src.clientX-rect.left)*scaleX, y: (src.clientY-rect.top)*scaleY };
+}
+
+function canvasDown(e) {
+  STATE.drawing=true;
+  const pos=getCanvasPos(e);
+  if(STATE.tool==='bar'||STATE.tool==='stir') {
+    placeMarker(pos);
+  } else {
+    saveCanvasState();
+    paintAt(pos);
+  }
+}
+function canvasMove(e) {
+  if(!STATE.drawing) return;
+  const pos=getCanvasPos(e);
+  if(STATE.tool!=='bar'&&STATE.tool!=='stir') paintAt(pos);
+}
+function canvasUp() { STATE.drawing=false; updatePickedPercent(); }
+function canvasTouchStart(e){e.preventDefault();canvasDown(e);}
+function canvasTouchMove(e){e.preventDefault();canvasMove(e);}
+
+function paintAt({x,y}) {
+  const r=STATE.brushSize;
+  CTX.globalCompositeOperation = STATE.tool==='erase'?'destination-out':'source-over';
+  CTX.beginPath();
+  if(STATE.tool==='pick') {
+    CTX.arc(x,y,r,0,Math.PI*2);
+    CTX.fillStyle='rgba(251,146,60,0.45)'; CTX.fill();
+    CTX.strokeStyle='rgba(234,88,12,0.6)'; CTX.lineWidth=1; CTX.stroke();
+  } else if(STATE.tool==='crack') {
+    CTX.moveTo(x-r,y-r/2); CTX.lineTo(x,y+r); CTX.lineTo(x+r,y-r/2);
+    CTX.strokeStyle='rgba(220,38,38,0.85)'; CTX.lineWidth=2; CTX.stroke();
+  } else if(STATE.tool==='erase') {
+    CTX.arc(x,y,r*1.5,0,Math.PI*2); CTX.fill();
+  }
+  CTX.globalCompositeOperation='source-over';
+}
+
+function placeMarker({x,y}) {
+  const p=getParams();
+  const diam = STATE.tool==='bar' ? (p.bars_front_diam||p.bars_diam||20) : (p.stirrup_diam||6);
+  const layer = STATE.tool==='bar' ? 'ARMADURA_LONG' : 'ESTRIBOS';
+  const color = STATE.tool==='bar' ? '#1e40af' : '#15803d';
+  const id = Date.now();
+  STATE.markers.push({ id, type:STATE.tool, x, y, diam, layer, color });
+  // Draw on canvas
+  CTX.beginPath(); CTX.arc(x,y,8,0,Math.PI*2);
+  CTX.fillStyle=color+'cc'; CTX.fill();
+  CTX.strokeStyle='#fff'; CTX.lineWidth=2; CTX.stroke();
+  // Label
+  CTX.font='bold 10px Inter,sans-serif'; CTX.fillStyle='#fff';
+  CTX.textAlign='center'; CTX.textBaseline='middle';
+  CTX.fillText('Ø'+diam, x, y);
+  updateMarkerList();
+  updateMarkedCount();
+  setStep(3);
+}
+
+function updateMarkerList() {
+  const list=document.getElementById('barList');
+  if(!STATE.markers.length) {
+    list.innerHTML='<div style="font-size:.75rem;color:var(--gray-500);text-align:center;padding:1rem">Use la herramienta "Marcar Barra" para registrar las barras encontradas</div>';
+    return;
+  }
+  list.innerHTML=STATE.markers.map(m=>`
+    <div class="bar-item">
+      <div class="bar-item-color" style="background:${m.color}"></div>
+      <div class="bar-item-info">${m.type==='bar'?'Barra long.':'Estribo'}</div>
+      <div class="bar-item-diam">Ø${m.diam}mm</div>
+      <button class="bar-item-del" onclick="removeMarker(${m.id})">×</button>
+    </div>`).join('');
+}
+function removeMarker(id) {
+  STATE.markers=STATE.markers.filter(m=>m.id!==id);
+  updateMarkerList(); updateMarkedCount();
+  // Redraw canvas from scratch
+  if(STATE.struct) { renderCanvas(STATE.struct); STATE.markers.forEach(m=>{
+    CTX.beginPath(); CTX.arc(m.x,m.y,8,0,Math.PI*2);
+    CTX.fillStyle=m.color+'cc'; CTX.fill();
+    CTX.strokeStyle='#fff'; CTX.lineWidth=2; CTX.stroke();
+    CTX.font='bold 10px Inter'; CTX.fillStyle='#fff'; CTX.textAlign='center'; CTX.textBaseline='middle';
+    CTX.fillText('Ø'+m.diam, m.x, m.y);
+  }); }
+}
+function updateMarkedCount() {
+  document.getElementById('markedCount').textContent=`${STATE.markers.length} marcados`;
+}
+function updatePickedPercent() {
+  try {
+    const data=CTX.getImageData(0,0,CV.width,CV.height).data;
+    let orange=0, total=0;
+    for(let i=3;i<data.length;i+=4){ total++; if(data[i-1]>100&&data[i-2]<150) orange++; }
+    const pct=Math.round(orange/total*100);
+    document.getElementById('canvasInfo').textContent=`${STRUCTS[STATE.struct]?.label||'—'} — Zona picada: ~${pct}%`;
+  } catch(e){}
+}
+
+function saveCanvasState() {
+  if(STATE.canvasHistory.length>20) STATE.canvasHistory.shift();
+  STATE.canvasHistory.push(CTX.getImageData(0,0,CV.width,CV.height));
+}
+function undoCanvas() {
+  if(STATE.canvasHistory.length>1) {
+    STATE.canvasHistory.pop();
+    CTX.putImageData(STATE.canvasHistory[STATE.canvasHistory.length-1],0,0);
+  }
+}
+function clearCanvas() {
+  if(!STATE.struct) return;
+  saveCanvasState(); renderCanvas(STATE.struct); STATE.markers=[];
+  updateMarkerList(); updateMarkedCount();
+}
+
+/* ─── PHOTO HANDLING ─── */
+function loadPhoto(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{ document.getElementById('photoImg').src=e.target.result; document.getElementById('photoPreview').style.display='block'; document.getElementById('uploadZone').style.display='none'; };
+  reader.readAsDataURL(file);
+}
+function clearPhoto() { document.getElementById('photoPreview').style.display='none'; document.getElementById('uploadZone').style.display='block'; document.getElementById('photoInput').value=''; }
+function handleDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('drag'); const file=e.dataTransfer.files[0]; if(file){ document.getElementById('photoInput').files=e.dataTransfer.files; loadPhoto(document.getElementById('photoInput')); }}
+
+/* ─── GET PARAMS ─── */
+function getParams() {
+  const p={};
+  document.querySelectorAll('#formPanels input, #formPanels select, #formPanels textarea').forEach(el=>{
+    p[el.id]=el.type==='number'?parseFloat(el.value):el.value;
+  });
+  // Also collect from all tabs by reading STRUCTS definition
+  if(!STATE.struct) return p;
+  const def=STRUCTS[STATE.struct];
+  for(const tab of Object.values(def.tabs)) for(const sec of tab) for(const f of sec.fields) {
+    if(!(f.id in p)) p[f.id]=f.val;
+  }
+  return p;
+}
+
+/* ─── GENERATE DXF ─── */
+async function generarDXF() {
+  if(!STATE.struct){ alert('Seleccione un tipo de estructura primero'); return; }
+  const apiUrl=document.getElementById('apiUrl').value.replace(/\/$/,'');
+  const params=getParams();
+  const def=STRUCTS[STATE.struct];
+  // Add canvas data as base64
+  params.canvas_data = CV.toDataURL('image/png');
+  params.markers = STATE.markers;
+  const btn=document.getElementById('btnGenerar');
+  btn.disabled=true;
+  setGenStatus('loading','Generando plano DXF...');
+  setStep(4);
+  try {
+    const r=await fetch(`${apiUrl}${def.endpoint}`,{
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(params)
+    });
+    if(!r.ok) throw new Error((await r.json().catch(()=>({detail:r.statusText}))).detail);
+    const blob=await r.blob();
+    const cd=r.headers.get('Content-Disposition')||'';
+    const match=cd.match(/filename="([^"]+)"/);
+    const filename=match?match[1]:`${STATE.struct}_${params.element_id||'E1'}.dxf`;
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+    setGenStatus('ok',`✓ Descargado: ${filename}`);
+    guardarEnHistorial(params, def.label);
+  } catch(e) {
+    setGenStatus('err',`Error: ${e.message}`);
+  } finally { btn.disabled=false; }
+}
+
+function setGenStatus(state, msg) {
+  const dot=document.getElementById('genDot'), txt=document.getElementById('genStatus');
+  dot.className='status-dot '+(state==='loading'?'loading':state==='ok'?'ok':state==='err'?'err':'idle');
+  txt.textContent=msg;
+}
+
+/* ─── HISTORIAL ─── */
+function guardarEnHistorial(params, label) {
+  const rec={
+    id: Date.now(), fecha:new Date().toLocaleDateString('es'), tipo:label,
+    ref:params.element_id||'—', obra:document.getElementById('obra-nombre')?.value||'—',
+    seccion: STATE.struct==='pilar-rect'?`${params.width}×${params.depth}cm`:
+             STATE.struct==='pilar-circ'?`Ø${params.diameter}cm`:
+             STATE.struct==='viga'?`${params.width}×${params.height}cm`:'—',
+    armadura: params.bars_front_diam?`${params.bars_front_count}Ø${params.bars_front_diam}`:
+              params.bars_diam?`${params.bars_count}Ø${params.bars_diam}`:'—',
+    notas:params.notes||''
+  };
+  STATE.history.push(rec);
+  renderHistorial();
+}
+function renderHistorial() {
+  const body=document.getElementById('historialBody');
+  if(!STATE.history.length){ body.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--gray-500);padding:2rem">No hay inspecciones registradas</td></tr>'; return; }
+  body.innerHTML=STATE.history.map(r=>`
+    <tr>
+      <td class="mono">${r.ref}</td>
+      <td>${r.tipo}</td>
+      <td class="mono">${r.fecha}</td>
+      <td>${r.obra}</td>
+      <td class="mono">${r.seccion}</td>
+      <td class="mono">${r.armadura}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.notas}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="eliminarReg(${r.id})">Eliminar</button></td>
+    </tr>`).join('');
+  document.getElementById('totalReg').textContent=`${STATE.history.length} registros`;
+  document.getElementById('hist-count').textContent=STATE.history.length;
+}
+function eliminarReg(id) { STATE.history=STATE.history.filter(r=>r.id!==id); renderHistorial(); }
+function exportarHistorial() {
+  if(!STATE.history.length) return;
+  const cols=['Ref','Tipo','Fecha','Obra','Seccion','Armadura','Notas'];
+  const rows=STATE.history.map(r=>[r.ref,r.tipo,r.fecha,r.obra,r.seccion,r.armadura,r.notas]);
+  const csv=[cols,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download='inspecciones.csv'; a.click();
+}
+
+/* ─── OBRA ─── */
+function guardarObra() { setGenStatus('ok','Datos de obra guardados'); alert('Datos de obra guardados correctamente'); }
+
+/* ─── RESET ─── */
+function resetForm() {
+  STATE.struct=null; STATE.markers=[];
+  document.querySelectorAll('.struct-card').forEach(c=>c.classList.remove('active'));
+  document.getElementById('formArea').style.display='none';
+  CTX.clearRect(0,0,CV.width,CV.height);
+  setStep(1); setGenStatus('idle','Preparado para generar');
+}
+
+/* ─── API CHECK ─── */
+async function checkApi() {
+  const url=document.getElementById('apiUrl').value.replace(/\/$/,'');
+  const dot=document.getElementById('apiDot'), txt=document.getElementById('apiStatusText');
+  dot.className='status-dot loading'; txt.textContent='Verificando...';
+  try {
+    const r=await fetch(`${url}/`,{signal:AbortSignal.timeout(3000)});
+    if(r.ok){ dot.className='status-dot ok'; txt.textContent='Conectado — backend activo'; }
+    else throw new Error(r.statusText);
+  } catch(e) { dot.className='status-dot err'; txt.textContent=`No disponible: ${e.message}`; }
+}
+
+/* ─── INSPECTOR VISUAL ─── */
+function loadInspPhoto(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image(); img.onload=()=>{
+      const ic=document.getElementById('inspCanvas');
+      ic.width=img.width; ic.height=img.height;
+      ic.style.display='block';
+      document.getElementById('inspCanvasWrap').style.display='block';
+      const cx=ic.getContext('2d'); cx.drawImage(img,0,0);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function updateOverlay(){}
+
+// Init
+window.addEventListener('DOMContentLoaded',()=>{ document.getElementById('obra-fecha').value=new Date().toISOString().split('T')[0]; });
+</script>
+</body>
+</html>
