@@ -1,38 +1,34 @@
-"""
-StructCAD Pro — Backend FastAPI
-Recibe datos del formulario adaptativo + canvas_data (zona picada en base64)
-y genera planos DXF con todas las capas y elementos marcados.
-"""
+"""StructCAD Pro v2 — FastAPI backend con motor DXF validado"""
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Any
-import io, base64
+import io
 
-from dxf_engine import (
+from dxf_engine_v2 import (
     generate_dxf_pillar_rect, generate_dxf_pillar_circ,
     generate_dxf_beam, generate_dxf_footing,
     generate_dxf_forjado, generate_dxf_stair
 )
 
-app = FastAPI(title="StructCAD Pro API", version="2.0.0")
+app = FastAPI(title="StructCAD Pro API", version="2.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-# ─── MODELOS BASE ──────────────────────────────────────────────────────────────
 
 class InspectionBase(BaseModel):
     element_id: Optional[str] = "E-01"
     planta: Optional[str] = None
     eje: Optional[str] = None
     fecha_insp: Optional[str] = None
+    obra_nombre: Optional[str] = None
+    tecnico: Optional[str] = None
     rebar_found: Optional[str] = "Sí"
     cover_measured: Optional[float] = None
     corrosion: Optional[str] = "Sin patologías"
     notes: Optional[str] = None
     anomalies: Optional[str] = None
-    canvas_data: Optional[str] = None   # base64 PNG de la zona picada
-    markers: Optional[List[Any]] = []   # [{type, x, y, diam, layer}]
+    canvas_data: Optional[str] = None
+    markers: Optional[List[Any]] = []
 
 class PillarRectData(InspectionBase):
     width: float = Field(..., gt=0)
@@ -112,15 +108,14 @@ class StairData(InspectionBase):
     relleno_type: Optional[str] = "Mortero/Cascote"
     depth_no_rebar: Optional[float] = None
 
-# ─── ENDPOINTS ────────────────────────────────────────────────────────────────
+def _stream(buf: io.BytesIO, filename: str) -> StreamingResponse:
+    return StreamingResponse(buf, media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"',
+                 "Access-Control-Expose-Headers": "Content-Disposition"})
 
 @app.get("/")
 def root():
-    return {"status": "ok", "version": "2.0.0", "structures": ["pillar-rect","pillar-circ","beam","footing","forjado","stair"]}
-
-def _stream(buf: io.BytesIO, filename: str) -> StreamingResponse:
-    return StreamingResponse(buf, media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    return {"status": "ok", "version": "2.1.0"}
 
 @app.post("/generate/pillar-rect")
 def gen_pilar_rect(data: PillarRectData):

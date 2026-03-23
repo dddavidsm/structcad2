@@ -1,877 +1,947 @@
 """
-dxf_engine.py — Motor paramétrico de generación DXF
-=====================================================
-Arquitectura de plantillas paramétricas:
+dxf_engine_v2.py — Motor DXF completamente reescrito
+====================================================
+Genera DXF R2000 (AC1015) — formato estable y compatible con
+AutoCAD 2000+, LibreCAD, DraftSight, BricsCAD y visores online.
 
-Cada tipo de estructura define un "modelo base" en coordenadas normalizadas
-(origen = esquina inf-izq, unidad = 1 cm). Las funciones reciben los parámetros
-del formulario y calculan posiciones de todos los elementos geométricamente,
-sin dibujar línea a línea de forma ad-hoc.
-
-Capas estándar en todos los planos:
-  - SECCION       : contorno exterior hormigón
-  - ZONA_PICADA   : área inspeccionada (borde irregular)
-  - ARMADURA_LONG : barras longitudinales
-  - ESTRIBOS      : armadura transversal
-  - COTAS         : sistema de acotado automático
-  - TEXTO         : etiquetas, rótulos, notas
-  - CAJETIN       : cuadro de título
+Arquitectura:
+  - Clase DXFDoc: acumula entidades y serializa el documento completo
+  - Entidades soportadas: LINE, CIRCLE, ARC, LWPOLYLINE, TEXT, MTEXT
+  - Capas con color y tipo de línea
+  - Acotado lineal manual (líneas de extensión + línea de cota + texto)
+  - Zona picada como LWPOLYLINE cerrada (polígono irregular)
+  - Barras en sección: CIRCLE (solo contorno, sin SOLID)
+  - Barras en alzado: LINE gruesa (lw=50 = 0.50mm)
 """
 
 import io
 import math
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
-# ─── UTILIDADES CORE ──────────────────────────────────────────────────────────
+# ─── CAPAS ESTÁNDAR ──────────────────────────────────────────────────────────
+LAYERS = {
+    "SECCION":      {"color": 7,   "lw": 50,  "lt": "CONTINUOUS"},  # blanco/negro
+    "ZONA_PICADA":  {"color": 30,  "lw": 25,  "lt": "CONTINUOUS"},  # naranja
+    "ARMADURA_LONG":{"color": 5,   "lw": 70,  "lt": "CONTINUOUS"},  # azul, 0.70mm
+    "ESTRIBOS":     {"color": 3,   "lw": 35,  "lt": "CONTINUOUS"},  # verde, 0.35mm
+    "COTAS":        {"color": 2,   "lw": 13,  "lt": "CONTINUOUS"},  # amarillo, 0.13mm
+    "TEXTO":        {"color": 7,   "lw": 13,  "lt": "CONTINUOUS"},
+    "CAJETIN":      {"color": 8,   "lw": 18,  "lt": "CONTINUOUS"},
+    "ZONA_FILL":    {"color": 30,  "lw": 0,   "lt": "CONTINUOUS"},  # relleno zona
+}
 
-def build_dxf_manual(sections: List[str]) -> io.BytesIO:
-    """
-    Construye un DXF R12 válido a partir de secciones de entidades.
-    Fallback cuando ezdxf no está disponible.
-    """
-    header = """  0\nSECTION\n  2\nHEADER\n  9\n$ACADVER\n  1\nAC1009\n  9\n$INSUNITS\n 70\n5\n  0\nENDSEC\n"""
-    
-    layers = ["SECCION", "ZONA_PICADA", "ARMADURA_LONG", "ESTRIBOS", "COTAS", "TEXTO", "CAJETIN"]
-    layer_colors = {"SECCION": 7, "ZONA_PICADA": 253, "ARMADURA_LONG": 7,
-                    "ESTRIBOS": 5, "COTAS": 3, "TEXTO": 7, "CAJETIN": 8}
-    
-    tables = "  0\nSECTION\n  2\nTABLES\n  0\nTABLE\n  2\nLAYER\n 70\n{}\n".format(len(layers))
-    for l in layers:
-        c = layer_colors.get(l, 7)
-        tables += f"  0\nLAYER\n  2\n{l}\n 70\n0\n 62\n{c}\n  6\nCONTINUOUS\n"
-    tables += "  0\nENDTABLE\n  0\nTABLE\n  2\nSTYLE\n 70\n1\n  0\nSTYLE\n  2\nSTANDARD\n 70\n0\n 40\n0.0\n 41\n1.0\n 42\n0.2\n 50\n0.0\n 71\n0\n  4\ntxt\n  0\nENDTABLE\n  0\nENDSEC\n"
-    
-    body = "  0\nSECTION\n  2\nENTITIES\n"
-    for s in sections:
-        body += s
-    body += "  0\nENDSEC\n  0\nEOF\n"
-    
-    full = header + tables + body
-    buf = io.BytesIO(full.encode("utf-8"))
-    buf.seek(0)
-    return buf
+# ─── DXF DOCUMENT CLASS ───────────────────────────────────────────────────────
+class DXFDoc:
+    def __init__(self):
+        self._entities: List[str] = []
+
+    # ── Primitivos ──────────────────────────────────────────────────────────
+    def line(self, x1, y1, x2, y2, layer="SECCION", lw=None):
+        lw_code = f" 370\n{lw}\n" if lw is not None else ""
+        self._entities.append(
+            f"  0\nLINE\n  5\n{self._handle()}\n"
+            f"100\nAcDbEntity\n  8\n{layer}\n{lw_code}"
+            f"100\nAcDbLine\n"
+            f" 10\n{x1:.6f}\n 20\n{y1:.6f}\n 30\n0.0\n"
+            f" 11\n{x2:.6f}\n 21\n{y2:.6f}\n 31\n0.0\n"
+        )
+
+    def circle(self, cx, cy, r, layer="SECCION", lw=None):
+        lw_code = f" 370\n{lw}\n" if lw is not None else ""
+        self._entities.append(
+            f"  0\nCIRCLE\n  5\n{self._handle()}\n"
+            f"100\nAcDbEntity\n  8\n{layer}\n{lw_code}"
+            f"100\nAcDbCircle\n"
+            f" 10\n{cx:.6f}\n 20\n{cy:.6f}\n 30\n0.0\n"
+            f" 40\n{r:.6f}\n"
+        )
+
+    def arc(self, cx, cy, r, start_angle, end_angle, layer="SECCION"):
+        self._entities.append(
+            f"  0\nARC\n  5\n{self._handle()}\n"
+            f"100\nAcDbEntity\n  8\n{layer}\n"
+            f"100\nAcDbCircle\n"
+            f" 10\n{cx:.6f}\n 20\n{cy:.6f}\n 30\n0.0\n"
+            f" 40\n{r:.6f}\n"
+            f"100\nAcDbArc\n"
+            f" 50\n{start_angle:.6f}\n 51\n{end_angle:.6f}\n"
+        )
+
+    def lwpolyline(self, pts: List[Tuple[float,float]], layer="SECCION",
+                   closed=False, lw=None, const_width=0.0):
+        """LWPOLYLINE — muy eficiente para polígonos y perfiles"""
+        flags = 1 if closed else 0
+        lw_code = f" 370\n{lw}\n" if lw is not None else ""
+        e = (f"  0\nLWPOLYLINE\n  5\n{self._handle()}\n"
+             f"100\nAcDbEntity\n  8\n{layer}\n{lw_code}"
+             f"100\nAcDbPolyline\n"
+             f" 90\n{len(pts)}\n 70\n{flags}\n 43\n{const_width:.4f}\n")
+        for x, y in pts:
+            e += f" 10\n{x:.6f}\n 20\n{y:.6f}\n"
+        self._entities.append(e)
+
+    def filled_circle(self, cx, cy, r, layer="ARMADURA_LONG"):
+        """
+        Círculo relleno usando HATCH (solo R2000+).
+        Dibuja un círculo negro sólido — representa barra en sección.
+        """
+        # Seed point + boundary loop with circle
+        e = (f"  0\nHATCH\n  5\n{self._handle()}\n"
+             f"100\nAcDbEntity\n  8\n{layer}\n"
+             f"100\nAcDbHatch\n"
+             f" 10\n{cx:.6f}\n 20\n{cy:.6f}\n 30\n0.0\n"
+             f"210\n0.0\n220\n0.0\n230\n1.0\n"  # normal
+             f"  2\nSOLID\n 70\n1\n 71\n0\n"  # SOLID pattern, associative=0
+             f" 91\n1\n"  # 1 loop
+             f" 92\n3\n"  # boundary type = external + derived
+             f" 93\n1\n"  # 1 edge in loop
+             f" 72\n3\n"  # edge type = circle arc
+             f" 10\n{cx:.6f}\n 20\n{cy:.6f}\n"  # center
+             f" 40\n{r:.6f}\n"  # radius
+             f" 50\n0.0\n 51\n360.0\n 73\n1\n"  # angles, CCW
+             f" 97\n0\n"  # 0 source boundaries
+             f" 75\n1\n 76\n1\n"  # hatch style=normal, pattern type=predefined
+             f" 98\n1\n 10\n{cx:.6f}\n 20\n{cy:.6f}\n"  # seed point
+        )
+        self._entities.append(e)
+        # Add circle outline on top
+        self.circle(cx, cy, r, layer, lw=25)
+
+    def text(self, x, y, height, content, layer="TEXTO", h_align=1, angle=0.0):
+        """
+        h_align: 0=left, 1=center, 2=right, 4=middle_center
+        """
+        just = 0 if h_align == 0 else (1 if h_align == 1 else 2)
+        e = (f"  0\nTEXT\n  5\n{self._handle()}\n"
+             f"100\nAcDbEntity\n  8\n{layer}\n"
+             f"100\nAcDbText\n"
+             f" 10\n{x:.6f}\n 20\n{y:.6f}\n 30\n0.0\n"
+             f" 40\n{height:.4f}\n"
+             f"  1\n{content}\n"
+             f" 50\n{angle:.4f}\n"
+             f"  7\nSTANDARD\n"
+        )
+        if h_align != 0:
+            e += f" 72\n{just}\n 11\n{x:.6f}\n 21\n{y:.6f}\n 31\n0.0\n"
+        e += "100\nAcDbText\n"
+        self._entities.append(e)
+
+    # ── Compuestos ───────────────────────────────────────────────────────────
+    def rect(self, x, y, w, h, layer="SECCION", lw=None):
+        pts = [(x,y),(x+w,y),(x+w,y+h),(x,y+h)]
+        self.lwpolyline(pts, layer=layer, closed=True, lw=lw)
+
+    def bar_section(self, cx, cy, r, layer="ARMADURA_LONG"):
+        """Barra longitudinal en sección: círculo relleno"""
+        self.filled_circle(cx, cy, r, layer)
+
+    def bar_elevation(self, x, y_bot, y_top, diam_mm, layer="ARMADURA_LONG"):
+        """Barra longitudinal en alzado: línea gruesa proporcional al diámetro"""
+        # Grosor de línea en DXF: diam_mm * 10 (unidades 1/100mm), clamp
+        lw = max(25, min(200, int(diam_mm * 8)))
+        self.line(x, y_bot, x, y_top, layer=layer, lw=lw)
+
+    def stirrup_elevation(self, x1, y, x2, layer="ESTRIBOS"):
+        """Estribo en alzado: línea horizontal"""
+        self.line(x1, y, x2, y, layer=layer, lw=35)
+
+    def stirrup_rect(self, x, y, w, h, r_corner, layer="ESTRIBOS"):
+        """Estribo rectangular con esquinas redondeadas (arcos + líneas)"""
+        rc = r_corner
+        # Lados rectos
+        self.line(x+rc, y,   x+w-rc, y,   layer)
+        self.line(x+w,  y+rc, x+w, y+h-rc, layer)
+        self.line(x+w-rc, y+h, x+rc, y+h,  layer)
+        self.line(x,  y+h-rc, x, y+rc,     layer)
+        # Esquinas
+        self.arc(x+rc,   y+rc,   rc, 180, 270, layer)
+        self.arc(x+w-rc, y+rc,   rc, 270, 360, layer)
+        self.arc(x+w-rc, y+h-rc, rc,   0,  90, layer)
+        self.arc(x+rc,   y+h-rc, rc,  90, 180, layer)
+
+    def dim_h(self, x1, x2, y_ref, y_base, label, layer="COTAS", h=2.2):
+        """Cota horizontal: líneas de extensión + línea de cota + texto"""
+        # Líneas de extensión
+        self.line(x1, y_base, x1, y_ref, layer)
+        self.line(x2, y_base, x2, y_ref, layer)
+        # Línea de cota
+        self.line(x1, y_ref, x2, y_ref, layer)
+        # Flechas (triángulos pequeños)
+        a = 1.2
+        self.line(x1, y_ref, x1+a*2, y_ref+a*0.7, layer)
+        self.line(x1, y_ref, x1+a*2, y_ref-a*0.7, layer)
+        self.line(x2, y_ref, x2-a*2, y_ref+a*0.7, layer)
+        self.line(x2, y_ref, x2-a*2, y_ref-a*0.7, layer)
+        # Texto centrado
+        mx = (x1+x2)/2
+        self.text(mx, y_ref+h*0.6, h, str(label), layer, h_align=1)
+
+    def dim_v(self, y1, y2, x_ref, x_base, label, layer="COTAS", h=2.2):
+        """Cota vertical"""
+        self.line(x_base, y1, x_ref, y1, layer)
+        self.line(x_base, y2, x_ref, y2, layer)
+        self.line(x_ref, y1, x_ref, y2, layer)
+        a = 1.2
+        self.line(x_ref, y1, x_ref+a*0.7, y1+a*2, layer)
+        self.line(x_ref, y1, x_ref-a*0.7, y1+a*2, layer)
+        self.line(x_ref, y2, x_ref+a*0.7, y2-a*2, layer)
+        self.line(x_ref, y2, x_ref-a*0.7, y2-a*2, layer)
+        my = (y1+y2)/2
+        self.text(x_ref+h*0.6, my, h, str(label), layer, h_align=0, angle=90.0)
+
+    def label_arrow(self, x_tip, y_tip, x_text, y_text, lines, layer="TEXTO", h=2.5):
+        """Flecha de anotación con texto multilínea"""
+        # Línea guía
+        self.line(x_tip, y_tip, x_text, y_text, layer)
+        # Cabeza de flecha
+        dx = x_text - x_tip; dy = y_text - y_tip
+        lng = math.sqrt(dx*dx + dy*dy) or 1
+        ux = dx/lng; uy = dy/lng; px = -uy; py = ux
+        a = 1.5
+        self.line(x_tip, y_tip, x_tip+ux*a*2+px*a*0.6, y_tip+uy*a*2+py*a*0.6, layer)
+        self.line(x_tip, y_tip, x_tip+ux*a*2-px*a*0.6, y_tip+uy*a*2-py*a*0.6, layer)
+        # Texto
+        for i, l in enumerate(lines):
+            self.text(x_text, y_text + i*h*1.4, h, l, layer, h_align=0)
+
+    def title(self, x, y, txt, layer="TEXTO", h=3.5):
+        self.text(x, y, h, txt, layer, h_align=1)
+        self.line(x - len(txt)*h*0.35, y-1, x + len(txt)*h*0.35, y-1, layer)
+
+    def cajetin(self, x, y, data: dict, w=90, h=22):
+        """Cuadro de título con datos de la inspección"""
+        self.rect(x, y, w, h, "CAJETIN")
+        self.line(x, y+h*0.6, x+w, y+h*0.6, "CAJETIN")
+        self.line(x+w*0.45, y, x+w*0.45, y+h*0.6, "CAJETIN")
+        self.text(x+w/2, y+h*0.8, 3.2, data.get("empresa","StructCAD Pro"), "CAJETIN", 1)
+        self.text(x+3, y+h*0.35, 2.2, f"Obra: {data.get('obra','—')}", "CAJETIN", 0)
+        self.text(x+3, y+h*0.18, 1.9, f"Elem: {data.get('ref','—')}  |  Planta: {data.get('planta','—')}  |  Eje: {data.get('eje','—')}", "CAJETIN", 0)
+        self.text(x+w*0.47, y+h*0.35, 2.2, f"Escala: {data.get('escala','1:20')}", "CAJETIN", 0)
+        self.text(x+w*0.47, y+h*0.18, 1.9, f"Fecha: {data.get('fecha','—')}  |  Técnico: {data.get('tecnico','—')}", "CAJETIN", 0)
+        # Nota inspección
+        notes = data.get("notes","")
+        if notes:
+            self.text(x+3, y-4, 1.9, f"Obs: {notes[:80]}", "CAJETIN", 0)
+
+    def zona_picada_boundary(self, pts: List[Tuple[float,float]],
+                              layer="ZONA_PICADA"):
+        """Borde de zona picada como polilínea abierta con línea discontinua"""
+        if len(pts) < 2:
+            return
+        e = (f"  0\nLWPOLYLINE\n  5\n{self._handle()}\n"
+             f"100\nAcDbEntity\n  8\n{layer}\n"
+             f" 370\n18\n"  # lw 0.18mm
+             f"100\nAcDbPolyline\n"
+             f" 90\n{len(pts)}\n 70\n0\n 43\n0.0\n")
+        for x, y in pts:
+            e += f" 10\n{x:.6f}\n 20\n{y:.6f}\n"
+        self._entities.append(e)
+
+    # ── Serialización ────────────────────────────────────────────────────────
+    _hc = 100  # handle counter
+
+    def _handle(self):
+        self._hc += 1
+        return f"{self._hc:X}"
+
+    def serialize(self) -> bytes:
+        out = []
+        out.append(self._header())
+        out.append(self._tables())
+        out.append(self._blocks())
+        out.append("  0\nSECTION\n  2\nENTITIES\n")
+        for e in self._entities:
+            out.append(e)
+        out.append("  0\nENDSEC\n  0\nEOF\n")
+        return "".join(out).encode("utf-8")
+
+    def _header(self):
+        return (
+            "  0\nSECTION\n  2\nHEADER\n"
+            "  9\n$ACADVER\n  1\nAC1015\n"
+            "  9\n$DWGCODEPAGE\n  3\nANSI_1252\n"
+            "  9\n$INSUNITS\n 70\n5\n"
+            "  9\n$MEASUREMENT\n 70\n1\n"
+            "  9\n$EXTMIN\n 10\n-500.0\n 20\n-500.0\n 30\n0.0\n"
+            "  9\n$EXTMAX\n 10\n2000.0\n 20\n2000.0\n 30\n0.0\n"
+            "  9\n$LTSCALE\n 40\n1.0\n"
+            "  9\n$TEXTSTYLE\n  7\nSTANDARD\n"
+            "  0\nENDSEC\n"
+        )
+
+    def _tables(self):
+        t = "  0\nSECTION\n  2\nTABLES\n"
+        # LTYPE table
+        t += ("  0\nTABLE\n  2\nLTYPE\n  5\n5\n100\nAcDbSymbolTable\n"
+              " 70\n1\n"
+              "  0\nLTYPE\n  5\n14\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n"
+              "  2\nCONTINUOUS\n 70\n0\n  3\nSolid line\n 72\n65\n 73\n0\n 40\n0.0\n"
+              "  0\nENDTABLE\n")
+        # STYLE table
+        t += ("  0\nTABLE\n  2\nSTYLE\n  5\n3\n100\nAcDbSymbolTable\n 70\n1\n"
+              "  0\nSTYLE\n  5\n11\n100\nAcDbSymbolTableRecord\n100\nAcDbTextStyleTableRecord\n"
+              "  2\nSTANDARD\n 70\n0\n 40\n0.0\n 41\n1.0\n 50\n0.0\n 71\n0\n  4\ntxt\n  0\nENDTABLE\n")
+        # LAYER table
+        t += f"  0\nTABLE\n  2\nLAYER\n  5\n2\n100\nAcDbSymbolTable\n 70\n{len(LAYERS)+1}\n"
+        t += ("  0\nLAYER\n  5\n10\n100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n"
+              "  2\n0\n 70\n0\n 62\n7\n  6\nCONTINUOUS\n 370\n-3\n")
+        handle = 20
+        for name, props in LAYERS.items():
+            t += (f"  0\nLAYER\n  5\n{handle:X}\n"
+                  f"100\nAcDbSymbolTableRecord\n100\nAcDbLayerTableRecord\n"
+                  f"  2\n{name}\n 70\n0\n 62\n{props['color']}\n"
+                  f"  6\n{props['lt']}\n 370\n{props['lw']}\n")
+            handle += 1
+        t += "  0\nENDTABLE\n"
+        # VIEW table (empty, required)
+        t += "  0\nTABLE\n  2\nVIEW\n  5\n6\n100\nAcDbSymbolTable\n 70\n0\n  0\nENDTABLE\n"
+        # UCS, APPID, DIMSTYLE (empty but needed for R2000)
+        t += "  0\nTABLE\n  2\nUCS\n  5\n7\n100\nAcDbSymbolTable\n 70\n0\n  0\nENDTABLE\n"
+        t += "  0\nTABLE\n  2\nAPPID\n  5\n9\n100\nAcDbSymbolTable\n 70\n0\n  0\nENDTABLE\n"
+        t += "  0\nTABLE\n  2\nDIMSTYLE\n  5\nA\n100\nAcDbSymbolTable\n 70\n0\n  0\nENDTABLE\n"
+        t += "  0\nTABLE\n  2\nBLOCK_RECORD\n  5\n1\n100\nAcDbSymbolTable\n 70\n2\n"
+        t += ("  0\nBLOCK_RECORD\n  5\n1F\n100\nAcDbSymbolTableRecord\n"
+              "100\nAcDbBlockTableRecord\n  2\n*MODEL_SPACE\n")
+        t += ("  0\nBLOCK_RECORD\n  5\n1B\n100\nAcDbSymbolTableRecord\n"
+              "100\nAcDbBlockTableRecord\n  2\n*PAPER_SPACE\n")
+        t += "  0\nENDTABLE\n"
+        t += "  0\nENDSEC\n"
+        return t
+
+    def _blocks(self):
+        return (
+            "  0\nSECTION\n  2\nBLOCKS\n"
+            "  0\nBLOCK\n  5\n1E\n100\nAcDbEntity\n  8\n0\n"
+            "100\nAcDbBlockBegin\n  2\n*MODEL_SPACE\n 70\n0\n"
+            " 10\n0.0\n 20\n0.0\n 30\n0.0\n  3\n*MODEL_SPACE\n  1\n\n"
+            "  0\nENDBLK\n  5\n1F\n100\nAcDbEntity\n  8\n0\n100\nAcDbBlockEnd\n"
+            "  0\nBLOCK\n  5\n1A\n100\nAcDbEntity\n  8\n0\n"
+            "100\nAcDbBlockBegin\n  2\n*PAPER_SPACE\n 70\n0\n"
+            " 10\n0.0\n 20\n0.0\n 30\n0.0\n  3\n*PAPER_SPACE\n  1\n\n"
+            "  0\nENDBLK\n  5\n1B\n100\nAcDbEntity\n  8\n0\n100\nAcDbBlockEnd\n"
+            "  0\nENDSEC\n"
+        )
+
+    def to_buffer(self) -> io.BytesIO:
+        buf = io.BytesIO(self.serialize())
+        buf.seek(0)
+        return buf
 
 
-def _line(x1, y1, x2, y2, layer="SECCION") -> str:
-    return (f"  0\nLINE\n  8\n{layer}\n"
-            f" 10\n{x1:.4f}\n 20\n{y1:.4f}\n 30\n0.0\n"
-            f" 11\n{x2:.4f}\n 21\n{y2:.4f}\n 31\n0.0\n")
+# ─── HELPERS GEOMÉTRICOS ──────────────────────────────────────────────────────
 
-def _circle(cx, cy, r, layer="ARMADURA_LONG") -> str:
-    return (f"  0\nCIRCLE\n  8\n{layer}\n"
-            f" 10\n{cx:.4f}\n 20\n{cy:.4f}\n 30\n0.0\n"
-            f" 40\n{r:.4f}\n")
-
-def _solid(x1,y1, x2,y2, x3,y3, x4,y4, layer="ARMADURA_LONG") -> str:
-    """SOLID de 4 puntos — relleno para sección de barra"""
-    return (f"  0\nSOLID\n  8\n{layer}\n"
-            f" 10\n{x1:.4f}\n 20\n{y1:.4f}\n 30\n0.0\n"
-            f" 11\n{x2:.4f}\n 21\n{y2:.4f}\n 31\n0.0\n"
-            f" 12\n{x3:.4f}\n 21\n{y3:.4f}\n 31\n0.0\n"
-            f" 13\n{x4:.4f}\n 21\n{y4:.4f}\n 31\n0.0\n")
-
-def _bar_section(cx, cy, r, layer="ARMADURA_LONG") -> str:
-    """Barra en sección: círculo + relleno aproximado con SOLIDs"""
-    out = _circle(cx, cy, r, layer)
-    # Rellenar con SOLIDs concéntricos
-    for fr in [0.8, 0.5, 0.2]:
-        rr = r * fr
-        out += _solid(cx-rr, cy, cx, cy+rr, cx, cy-rr, cx+rr, cy, layer)
-    return out
-
-def _text(x, y, h, content, layer="TEXTO", angle=0.0) -> str:
-    return (f"  0\nTEXT\n  8\n{layer}\n"
-            f" 10\n{x:.4f}\n 20\n{y:.4f}\n 30\n0.0\n"
-            f" 40\n{h:.4f}\n"
-            f"  1\n{content}\n"
-            f" 50\n{angle:.2f}\n"
-            f" 72\n1\n"
-            f" 11\n{x:.4f}\n 21\n{y:.4f}\n 31\n0.0\n")
-
-def _mtext_leader(x_from, y_from, x_to, y_to, lines: List[str], h=2.5, layer="TEXTO") -> str:
-    """Flecha de anotación + texto multilínea"""
-    out = _line(x_from, y_from, x_to, y_to, layer)
-    # Flecha pequeña
-    dx = x_to - x_from
-    dy = y_to - y_from
-    length = math.sqrt(dx*dx + dy*dy) or 1
-    px = -dy/length * 1.5
-    py = dx/length * 1.5
-    out += _line(x_to, y_to, x_to+px+dx/length*2, y_to+py+dy/length*2, layer)
-    out += _line(x_to, y_to, x_to-px+dx/length*2, y_to-py+dy/length*2, layer)
-    # Textos
-    lh = h * 1.4
-    for i, l in enumerate(lines):
-        out += _text(x_from, y_from + i*lh, h, l, layer)
-    return out
-
-def _dim_horizontal(x1, y1, x2, dim_y, value_str, layer="COTAS", tick_h=1.5) -> str:
-    """Cota lineal horizontal automática"""
-    out = ""
-    out += _line(x1, y1, x1, dim_y, layer)
-    out += _line(x2, y1, x2, dim_y, layer)
-    out += _line(x1, dim_y, x2, dim_y, layer)
-    # Flechas
-    out += _line(x1, dim_y, x1+tick_h*1.5, dim_y+tick_h*0.6, layer)
-    out += _line(x1, dim_y, x1+tick_h*1.5, dim_y-tick_h*0.6, layer)
-    out += _line(x2, dim_y, x2-tick_h*1.5, dim_y+tick_h*0.6, layer)
-    out += _line(x2, dim_y, x2-tick_h*1.5, dim_y-tick_h*0.6, layer)
-    mid = (x1+x2)/2
-    out += _text(mid, dim_y + tick_h*0.8, 2.2, value_str, layer)
-    return out
-
-def _dim_vertical(x1, y1, y2, dim_x, value_str, layer="COTAS", tick_h=1.5) -> str:
-    """Cota lineal vertical automática"""
-    out = ""
-    out += _line(x1, y1, dim_x, y1, layer)
-    out += _line(x1, y2, dim_x, y2, layer)
-    out += _line(dim_x, y1, dim_x, y2, layer)
-    out += _line(dim_x, y1, dim_x+tick_h*0.6, y1+tick_h*1.5, layer)
-    out += _line(dim_x, y1, dim_x-tick_h*0.6, y1+tick_h*1.5, layer)
-    out += _line(dim_x, y2, dim_x+tick_h*0.6, y2-tick_h*1.5, layer)
-    out += _line(dim_x, y2, dim_x-tick_h*0.6, y2-tick_h*1.5, layer)
-    mid = (y1+y2)/2
-    out += _text(dim_x + tick_h*0.8, mid, 2.2, value_str, layer, 90.0)
-    return out
-
-def _rect(x, y, w, h, layer="SECCION") -> str:
-    """Rectángulo como 4 líneas"""
-    out  = _line(x,   y,   x+w, y,   layer)
-    out += _line(x+w, y,   x+w, y+h, layer)
-    out += _line(x+w, y+h, x,   y+h, layer)
-    out += _line(x,   y+h, x,   y,   layer)
-    return out
-
-def _irregular_border(points: List[Tuple[float,float]], layer="ZONA_PICADA") -> str:
-    """Polilínea de borde irregular (zona picada)"""
-    out = ""
-    for i in range(len(points)-1):
-        out += _line(points[i][0], points[i][1],
-                     points[i+1][0], points[i+1][1], layer)
-    return out
-
-def _stirrup_rect(x, y, w, h, r, layer="ESTRIBOS") -> str:
-    """
-    Estribo rectangular con esquinas redondeadas (aproximado con líneas + arcos).
-    x,y = esquina inf-izq del estribo (coordenadas exteriores)
-    """
-    out  = _line(x+r, y,   x+w-r, y,   layer)  # bottom
-    out += _line(x+w, y+r, x+w,   y+h-r, layer)  # right
-    out += _line(x+w-r, y+h, x+r, y+h, layer)  # top
-    out += _line(x,   y+h-r, x,   y+r, layer)  # left
-    # Esquinas (arcos de 90°)
-    out += (f"  0\nARC\n  8\n{layer}\n"
-            f" 10\n{x+r:.4f}\n 20\n{y+r:.4f}\n 30\n0.0\n"
-            f" 40\n{r:.4f}\n 50\n180.0\n 51\n270.0\n")
-    out += (f"  0\nARC\n  8\n{layer}\n"
-            f" 10\n{x+w-r:.4f}\n 20\n{y+r:.4f}\n 30\n0.0\n"
-            f" 40\n{r:.4f}\n 50\n270.0\n 51\n360.0\n")
-    out += (f"  0\nARC\n  8\n{layer}\n"
-            f" 10\n{x+w-r:.4f}\n 20\n{y+h-r:.4f}\n 30\n0.0\n"
-            f" 40\n{r:.4f}\n 50\n0.0\n 51\n90.0\n")
-    out += (f"  0\nARC\n  8\n{layer}\n"
-            f" 10\n{x+r:.4f}\n 20\n{y+h-r:.4f}\n 30\n0.0\n"
-            f" 40\n{r:.4f}\n 50\n90.0\n 51\n180.0\n")
-    return out
-
-def _cajetin(x, y, element_id, struct_type, notes="") -> str:
-    """Cuadro de título estándar"""
-    w, h = 80, 20
-    out  = _rect(x, y, w, h, "CAJETIN")
-    out += _line(x, y+13, x+w, y+13, "CAJETIN")
-    out += _line(x+40, y, x+40, y+13, "CAJETIN")
-    out += _text(x+2,  y+15.5, 3.5, f"StructCAD — {struct_type}", "CAJETIN")
-    out += _text(x+2,  y+10,   2.5, f"Elemento: {element_id}", "CAJETIN")
-    out += _text(x+42, y+10,   2.5, "Escala: 1:20", "CAJETIN")
-    out += _text(x+2,  y+6,    2.0, "Inspección estructural por rotura parcial", "CAJETIN")
-    out += _text(x+2,  y+2.5,  2.0, f"Notas: {notes or 'Sin observaciones'}", "CAJETIN")
-    return out
-
-def _view_title(x, y, title) -> str:
-    out  = _line(x-5, y-1, x+len(title)*1.6+5, y-1, "TEXTO")
-    out += _text(x, y+0.5, 3.0, title, "TEXTO")
-    return out
-
-def _irregular_zone_border(x0, y0, x1, y1, amplitude=2.0, steps=12, layer="ZONA_PICADA") -> str:
-    """
-    Genera un borde horizontal irregular (ondulado) entre dos puntos.
-    Simula el borde de la zona picada en obra.
-    """
+def _irregular_border_pts(x0, y0, x1, y1, amplitude=2.0, steps=10):
+    """Genera puntos de borde irregular reproducible (seed fija)"""
     import random
-    random.seed(42)  # seed fija para reproducibilidad
+    rng = random.Random(hash(f"{x0}{y0}{x1}{y1}") & 0xFFFF)
     pts = []
     for i in range(steps+1):
-        t = i/steps
-        bx = x0 + t*(x1-x0)
-        by = y0 + t*(y1-y0)
+        t = i / steps
+        x = x0 + t*(x1-x0)
+        y = y0 + t*(y1-y0)
         if 0 < i < steps:
-            by += random.uniform(-amplitude, amplitude)
-        pts.append((bx, by))
-    return _irregular_border(pts, layer)
+            y += rng.uniform(-amplitude, amplitude)
+        pts.append((x, y))
+    return pts
+
+def _notch_pts_symmetric(ox, oy, w, h_notch, notch_w, gap):
+    """Puntos para muescas simétricas (dientes de sierra arriba o abajo)"""
+    # Devuelve la polilínea exterior del pilar con muescas
+    # ox,oy = esquina inf-izq; w = ancho; notch_w = ancho de cada diente
+    pts = [
+        (ox, oy),
+        (ox, oy+h_notch),
+        (ox+notch_w, oy+h_notch),
+        (ox+notch_w, oy),
+        (ox+notch_w+gap, oy),
+        (ox+notch_w+gap, oy+h_notch),
+        (ox+w, oy+h_notch),
+        (ox+w, oy),
+    ]
+    return pts
 
 
-# ─── GENERADORES POR TIPO DE ESTRUCTURA ───────────────────────────────────────
+# ─── CAJETÍN DATA HELPER ──────────────────────────────────────────────────────
+
+def _cajetin_data(data) -> dict:
+    return {
+        "empresa": "StructCAD Pro — Inspección Estructural",
+        "obra":    getattr(data, 'obra_nombre', '—') or '—',
+        "ref":     getattr(data, 'element_id', 'E-01') or 'E-01',
+        "planta":  getattr(data, 'planta', '—') or '—',
+        "eje":     getattr(data, 'eje', '—') or '—',
+        "fecha":   getattr(data, 'fecha_insp', '—') or '—',
+        "tecnico": getattr(data, 'tecnico', '—') or '—',
+        "escala":  "1:20",
+        "notes":   getattr(data, 'notes', '') or '',
+    }
+
+
+# ─── GENERADORES POR ESTRUCTURA ───────────────────────────────────────────────
 
 def generate_dxf_pillar_rect(data) -> io.BytesIO:
     """
-    Pilar rectangular — 3 vistas: Sección en planta + Vista frontal + Vista lateral
-    
-    Plantilla base:
-    - Sección en planta centrada arriba (origen 0,0 = esquina inf-izq del pilar)
-    - Vista lateral abajo-izquierda (separada 20cm + margen)
-    - Vista frontal abajo-derecha
-    - Cajetín abajo del todo
+    Pilar rectangular — 3 vistas:
+      - Sección en planta (arriba, centrada)
+      - Vista lateral (abajo izquierda)
+      - Vista frontal (abajo derecha)
     """
-    W  = data.width          # cm
-    D  = data.depth          # cm
-    cf = data.cover_front    # recubrimiento cara frontal
-    cl = data.cover_lateral  # recubrimiento cara lateral
-    bf = data.bars_front_count
-    bl = data.bars_lateral_count
-    diam_f = data.bars_front_diam / 10   # mm → cm
-    diam_l = data.bars_lateral_diam / 10
-    diam_s = data.stirrup_diam / 10
-    ih     = data.inspection_height
-    eid    = data.element_id or "P-01"
+    W   = float(data.width)
+    D   = float(data.depth)
+    cf  = float(data.cover_front)
+    cl  = float(data.cover_lateral)
+    nbf = int(data.bars_front_count)
+    nbl = int(data.bars_lateral_count)
+    df  = float(data.bars_front_diam)
+    dl  = float(data.bars_lateral_diam)
+    ds  = float(data.stirrup_diam)
+    ih  = float(data.inspection_height)
 
-    ent = ""
+    # Separaciones entre barras (eje a eje)
+    sp_f = (W - 2*cf) / (nbf-1) if nbf > 1 else 0
+    sp_l = (D - 2*cl) / (nbl-1) if nbl > 1 else 0
 
-    # ── SEPARACIONES ENTRE BARRAS ──
-    # Cara frontal: espacio disponible entre estribos
-    inner_W = W - 2*cf
-    # separación entre ejes de barras frontales
-    if bf > 1:
-        sp_f = inner_W / (bf - 1)
-    else:
-        sp_f = 0
+    r_f = df/20   # radio barra (mm→cm, /2 para radio)
+    r_l = dl/20
 
-    inner_D = D - 2*cl
-    if bl > 1:
-        sp_l = inner_D / (bl - 1)
-    else:
-        sp_l = 0
+    doc = DXFDoc()
 
-    r_bar_f = diam_f / 2
-    r_bar_l = diam_l / 2
+    # ════════════════════════════════════════════════════════════════
+    # BLOQUE 1: SECCIÓN EN PLANTA
+    # Origen: (0, 0) = esquina inf-izq del pilar
+    # ════════════════════════════════════════════════════════════════
+    PX, PY = 0.0, 0.0
 
-    # ─────────────────────────────────────────────────────────────
-    # VISTA 1: SECCIÓN EN PLANTA
-    # Origen planta: (PLAN_X, PLAN_Y)
-    # ─────────────────────────────────────────────────────────────
-    PLAN_X, PLAN_Y = 0, 0
-
-    # Contorno exterior
-    ent += _rect(PLAN_X, PLAN_Y, W, D, "SECCION")
+    # Contorno exterior (hormigón con recubrimiento intacto)
+    doc.rect(PX, PY, W, D, "SECCION", lw=70)
 
     # Zona picada: esquina inferior-izquierda, forma orgánica
-    # El borde curva desde el lado izquierdo (a ~D*0.5) hasta el borde inferior (a ~W*0.6)
-    zp_pts = [
-        (PLAN_X,        PLAN_Y + D*0.45),
-        (PLAN_X + W*0.08, PLAN_Y + D*0.60),
-        (PLAN_X + W*0.15, PLAN_Y + D*0.72),
-        (PLAN_X + W*0.22, PLAN_Y + D*0.80),
-        (PLAN_X + W*0.32, PLAN_Y + D*0.86),
-        (PLAN_X + W*0.44, PLAN_Y + D*0.88),
-        (PLAN_X + W*0.56, PLAN_Y + D*0.83),
-        (PLAN_X + W*0.65, PLAN_Y + D*0.74),
-        (PLAN_X + W*0.70, PLAN_Y + D*0.62),
-        (PLAN_X + W*0.70, PLAN_Y + D*0.50),
-        (PLAN_X + W*0.65, PLAN_Y + D*0.35),
-        (PLAN_X + W*0.55, PLAN_Y + D*0.22),
-        (PLAN_X + W*0.42, PLAN_Y + D*0.12),
-        (PLAN_X + W*0.28, PLAN_Y + D*0.05),
-        (PLAN_X + W*0.14, PLAN_Y + D*0.03),
-        (PLAN_X + W*0.05, PLAN_Y + D*0.08),
-        (PLAN_X,          PLAN_Y + D*0.18),
-        (PLAN_X,          PLAN_Y + D*0.45),
-    ]
-    ent += _irregular_border(zp_pts, "ZONA_PICADA")
+    # La zona cubre aprox el cuadrante inf-izq del pilar
+    # Borde superior (desde cara izq a ~60% del ancho)
+    zp_top_y = D * 0.48
+    zp_right_x = W * 0.68
+    # Construir polilínea del borde de zona picada
+    zp_border = (
+        [(PX, PY + zp_top_y)] +
+        _irregular_border_pts(PX, PY+zp_top_y, PX+W*0.25, PY+D*0.72, 1.5, 4) +
+        _irregular_border_pts(PX+W*0.25, PY+D*0.72, PX+zp_right_x, PY+D*0.88, 1.5, 4) +
+        _irregular_border_pts(PX+zp_right_x, PY+D*0.88, PX+zp_right_x, PY+D, 1.0, 3) +
+        [(PX+zp_right_x, PY+D), (PX, PY+D), (PX, PY+zp_top_y)]
+    )
+    doc.zona_picada_boundary(zp_border[:-1], "ZONA_PICADA")  # solo el borde
 
-    # Estribo Ø6 — rectángulo interior
-    stir_x = PLAN_X + cf - diam_s
-    stir_y = PLAN_Y + cl - diam_s
-    stir_w = W - 2*(cf - diam_s)
-    stir_d = D - 2*(cl - diam_s)
-    ent += _stirrup_rect(stir_x, stir_y, stir_w, stir_d, 0.8, "ESTRIBOS")
+    # Estribo Ø6 — rectángulo perimetral con esquinas redondeadas
+    r_corner = 0.8
+    doc.stirrup_rect(PX+cf-ds/10, PY+cl-ds/10,
+                     W-2*(cf-ds/10), D-2*(cl-ds/10), r_corner, "ESTRIBOS")
 
-    # 4 barras laterales (cara izquierda, columna)
-    bar_x_lat = PLAN_X + cl
-    for i in range(bl):
-        bar_y = PLAN_Y + cl + i * sp_l
-        ent += _bar_section(bar_x_lat, bar_y, r_bar_l, "ARMADURA_LONG")
+    # 4 barras laterales (cara izquierda) — círculos sobre el estribo
+    bx_lat = PX + cl
+    for i in range(nbl):
+        by = PY + cl + i * sp_l
+        doc.bar_section(bx_lat, by, r_l, "ARMADURA_LONG")
 
-    # 5 barras frontales (cara inferior, fila)
-    bar_y_front = PLAN_Y + cf
-    for i in range(bf):
-        bar_x = PLAN_X + cf + i * sp_f
-        ent += _bar_section(bar_x, bar_y_front, r_bar_f, "ARMADURA_LONG")
+    # 5 barras frontales (cara inferior) — círculos sobre el estribo
+    by_front = PY + cf
+    for i in range(nbf):
+        bx = PX + cf + i * sp_f
+        doc.bar_section(bx, by_front, r_f, "ARMADURA_LONG")
 
-    # Cotas planta
-    ent += _dim_horizontal(PLAN_X, PLAN_Y, PLAN_X+W, PLAN_Y - 15, f"{W}", "COTAS")
-    ent += _dim_vertical(PLAN_X+W, PLAN_Y, PLAN_Y+D, PLAN_X+W+15, f"{D}", "COTAS")
+    # ── Cotas sección en planta ──
+    # Cota total horizontal (88 cm)
+    doc.dim_h(PX, PX+W, PY-14, PY, str(int(W)), "COTAS")
+    # Sub-cotas horizontales
+    doc.dim_h(PX, PX+cf, PY-8, PY, str(int(cf)), "COTAS")
+    pos = PX+cf
+    for i in range(nbf-1):
+        doc.dim_h(pos, pos+sp_f, PY-8, PY, f"{sp_f:.0f}", "COTAS")
+        pos += sp_f
+    doc.dim_h(pos, PX+W, PY-8, PY, str(int(cf)), "COTAS")
 
-    # Sub-cotas horizontales (separaciones barras frontales)
-    cx = PLAN_X + cf
-    ent += _dim_horizontal(PLAN_X, PLAN_Y, cx, PLAN_Y-8, f"{cf}", "COTAS")
-    for i in range(bf-1):
-        ent += _dim_horizontal(cx + i*sp_f, PLAN_Y, cx+(i+1)*sp_f, PLAN_Y-8, f"{sp_f:.0f}", "COTAS")
-    ent += _dim_horizontal(cx+(bf-1)*sp_f, PLAN_Y, PLAN_X+W, PLAN_Y-8, f"{cf}", "COTAS")
+    # Cota total vertical (68 cm)
+    doc.dim_v(PY, PY+D, PX+W+14, PX+W, str(int(D)), "COTAS")
+    # Sub-cotas verticales
+    doc.dim_v(PY, PY+cl, PX+W+8, PX+W, str(int(cl)), "COTAS")
+    pos = PY+cl
+    for i in range(nbl-1):
+        doc.dim_v(pos, pos+sp_l, PX+W+8, PX+W, f"{sp_l:.0f}", "COTAS")
+        pos += sp_l
+    doc.dim_v(pos, PY+D, PX+W+8, PX+W, str(int(cl)), "COTAS")
 
-    # Sub-cotas verticales (separaciones barras laterales)
-    cy = PLAN_Y + cl
-    ent += _dim_vertical(PLAN_X+W, PLAN_Y, cy, PLAN_X+W+8, f"{cl}", "COTAS")
-    for i in range(bl-1):
-        ent += _dim_vertical(PLAN_X+W, cy+i*sp_l, cy+(i+1)*sp_l, PLAN_X+W+8, f"{sp_l:.0f}", "COTAS")
-    ent += _dim_vertical(PLAN_X+W, cy+(bl-1)*sp_l, PLAN_Y+D, PLAN_X+W+8, f"{cl}", "COTAS")
+    # ── Etiquetas con flecha ──
+    doc.label_arrow(bx_lat, PY+D-cl, PX+W+35, PY+D,
+                    [f"Ø{ds:.0f} mm", f"{nbl} Barres Ø{dl:.0f}mm"],
+                    "TEXTO", h=2.5)
+    doc.label_arrow(PX+cf+sp_f, by_front, PX+W+35, PY+5,
+                    [f"{nbf} Barres Ø{df:.0f}mm", f"Ø{ds:.0f} mm"],
+                    "TEXTO", h=2.5)
 
-    # Etiquetas con flecha
-    ent += _mtext_leader(PLAN_X+W+35, PLAN_Y+D-5, PLAN_X+cl, PLAN_Y+D-cl*0.8,
-                         [f"O{data.stirrup_diam:.0f} mm", f"{bl} Barres O{data.bars_lateral_diam:.0f}mm"],
-                         layer="TEXTO")
-    ent += _mtext_leader(PLAN_X+W+35, PLAN_Y+5, PLAN_X + W*0.7, PLAN_Y+cf,
-                         [f"{bf} Barres O{data.bars_front_diam:.0f}mm", f"O{data.stirrup_diam:.0f} mm"],
-                         layer="TEXTO")
+    # Rótulos ejes
+    doc.text(PX-18, PY+D/2, 2.8, "LATERAL", "TEXTO", h_align=1, angle=90)
+    doc.text(PX+W/2, PY-26, 2.8, "FRONTAL", "TEXTO", h_align=1)
+    doc.title(PX+W/2, PY+D+8, "SECCIO EN PLANTA")
 
-    ent += _text(PLAN_X - 20, PLAN_Y + D/2, 3.0, "LATERAL", "TEXTO", 90)
-    ent += _text(PLAN_X + W/2 - 10, PLAN_Y - 30, 3.0, "FRONTAL", "TEXTO")
-    ent += _view_title(PLAN_X, PLAN_Y + D + 5, "SECCIO EN PLANTA")
-
-    # ─────────────────────────────────────────────────────────────
-    # VISTA 2: VISTA LATERAL (cara de D cm)
+    # ════════════════════════════════════════════════════════════════
+    # BLOQUE 2: VISTA LATERAL (cara D)
     # Origen: (LAT_X, LAT_Y)
-    # ─────────────────────────────────────────────────────────────
-    LAT_X = -10
-    LAT_Y = -(ih + 80 + 50)   # debajo de la planta
+    # ════════════════════════════════════════════════════════════════
+    VIEW_H = ih + 65     # altura total representada del pilar
+    NOTCH  = 12          # altura de las muescas
+    NW     = D * 0.30    # ancho de cada diente
+    GAP    = D - 2*NW
 
-    VIEW_H = ih + 60  # altura total representada
+    LAT_X = -15.0
+    LAT_Y = -(VIEW_H + 55)
 
-    # Contorno pilar (ancho=D)
-    ent += _rect(LAT_X, LAT_Y, D, VIEW_H, "SECCION")
+    # Contorno pilar
+    doc.rect(LAT_X, LAT_Y, D, VIEW_H, "SECCION", lw=70)
 
-    # Muescas superiores (dientes de sierra simétricos)
-    notch_w = D * 0.32
-    notch_h = 10
-    gap = D - 2*notch_w
-    # diente izquierdo
-    ent += _rect(LAT_X, LAT_Y+VIEW_H, notch_w, notch_h, "SECCION")
-    # diente derecho
-    ent += _rect(LAT_X+D-notch_w, LAT_Y+VIEW_H, notch_w, notch_h, "SECCION")
-    # hueco entre dientes (blanco)
-    ent += _line(LAT_X+notch_w, LAT_Y+VIEW_H, LAT_X+D-notch_w, LAT_Y+VIEW_H, "SECCION")
+    # Muescas superiores (2 dientes simétricos)
+    top_y = LAT_Y + VIEW_H
+    doc.lwpolyline(_notch_pts_symmetric(LAT_X, top_y, D, NOTCH, NW, GAP),
+                   "SECCION", closed=False, lw=50)
+    # Muescas inferiores (invertidas)
+    bot_pts = _notch_pts_symmetric(LAT_X, LAT_Y, D, -NOTCH, NW, GAP)
+    doc.lwpolyline(bot_pts, "SECCION", closed=False, lw=50)
 
-    # Muescas inferiores
-    ent += _rect(LAT_X, LAT_Y-notch_h, notch_w, notch_h, "SECCION")
-    ent += _rect(LAT_X+D-notch_w, LAT_Y-notch_h, notch_w, notch_h, "SECCION")
-    ent += _line(LAT_X+notch_w, LAT_Y, LAT_X+D-notch_w, LAT_Y, "SECCION")
+    # Zona picada: franja horizontal central con bordes irregulares
+    mid_y_l = LAT_Y + VIEW_H / 2
+    zt_l = mid_y_l + ih/2
+    zb_l = mid_y_l - ih/2
 
-    # Zona picada (franja central con bordes irregulares)
-    mid_y = LAT_Y + VIEW_H/2
-    zone_top = mid_y + ih/2
-    zone_bot = mid_y - ih/2
+    top_border_l = _irregular_border_pts(LAT_X, zt_l, LAT_X+D, zt_l, 1.8, 10)
+    bot_border_l = _irregular_border_pts(LAT_X, zb_l, LAT_X+D, zb_l, 1.8, 10)
+    doc.zona_picada_boundary(top_border_l, "ZONA_PICADA")
+    doc.zona_picada_boundary(bot_border_l, "ZONA_PICADA")
+    # Límites laterales de la zona
+    doc.line(LAT_X, zb_l, LAT_X, zt_l, "ZONA_PICADA")
+    doc.line(LAT_X+D, zb_l, LAT_X+D, zt_l, "ZONA_PICADA")
 
-    ent += _irregular_zone_border(LAT_X, zone_top, LAT_X+D, zone_top, 1.5, 10, "ZONA_PICADA")
-    ent += _irregular_zone_border(LAT_X, zone_bot, LAT_X+D, zone_bot, 1.5, 10, "ZONA_PICADA")
-
-    # Barras longitudinales (líneas verticales en zona picada)
-    for i in range(bl):
+    # 4 barras Ø20: líneas verticales en zona picada
+    for i in range(nbl):
         bx = LAT_X + cl + i * sp_l
-        ent += _line(bx, zone_bot - 2, bx, zone_top + 2, "ARMADURA_LONG")
+        doc.bar_elevation(bx, zb_l-1.5, zt_l+1.5, dl, "ARMADURA_LONG")
 
-    # Estribos (líneas horizontales)
-    ent += _line(LAT_X, zone_top, LAT_X+D, zone_top, "ESTRIBOS")
-    ent += _line(LAT_X, zone_bot, LAT_X+D, zone_bot, "ESTRIBOS")
+    # 2 estribos Ø6 (líneas horizontales)
+    doc.stirrup_elevation(LAT_X, zt_l, LAT_X+D, "ESTRIBOS")
+    doc.stirrup_elevation(LAT_X, zb_l, LAT_X+D, "ESTRIBOS")
 
     # Cotas vista lateral
-    ent += _dim_horizontal(LAT_X, LAT_Y, LAT_X+D, LAT_Y-15, f"{D}", "COTAS")
-    # Sub-cotas
-    cx = LAT_X + cl
-    ent += _dim_horizontal(LAT_X, LAT_Y, cx, LAT_Y-8, f"{cl}", "COTAS")
-    for i in range(bl-1):
-        ent += _dim_horizontal(cx+i*sp_l, LAT_Y, cx+(i+1)*sp_l, LAT_Y-8, f"{sp_l:.0f}", "COTAS")
-    ent += _dim_horizontal(cx+(bl-1)*sp_l, LAT_Y, LAT_X+D, LAT_Y-8, f"{cl}", "COTAS")
+    doc.dim_h(LAT_X, LAT_X+D, LAT_Y-14, LAT_Y, str(int(D)), "COTAS")
+    doc.dim_h(LAT_X, LAT_X+cl, LAT_Y-8, LAT_Y, str(int(cl)), "COTAS")
+    pos = LAT_X+cl
+    for i in range(nbl-1):
+        doc.dim_h(pos, pos+sp_l, LAT_Y-8, LAT_Y, f"{sp_l:.0f}", "COTAS")
+        pos += sp_l
+    doc.dim_h(pos, LAT_X+D, LAT_Y-8, LAT_Y, str(int(cl)), "COTAS")
+    doc.dim_v(zb_l, zt_l, LAT_X+D+14, LAT_X+D, str(int(ih)), "COTAS")
 
-    # Cota zona picada (derecha)
-    ent += _dim_vertical(LAT_X+D, zone_bot, zone_top, LAT_X+D+15, f"{ih}", "COTAS")
+    # Etiqueta
+    doc.label_arrow(LAT_X, mid_y_l, LAT_X-35, mid_y_l+5,
+                    [f"{nbl} Barres Ø{dl:.0f}mm", f"Ø{ds:.0f} mm"],
+                    "TEXTO", h=2.5)
+    doc.title(LAT_X+D/2, LAT_Y-26, "VISTA LATERAL")
 
-    ent += _mtext_leader(LAT_X-35, mid_y, LAT_X+cl, mid_y,
-                         [f"{bl} Barres O{data.bars_lateral_diam:.0f}mm", f"O{data.stirrup_diam:.0f} mm"],
-                         layer="TEXTO")
-    ent += _view_title(LAT_X + D/2 - 15, LAT_Y - 25, "VISTA LATERAL")
-
-    # ─────────────────────────────────────────────────────────────
-    # VISTA 3: VISTA FRONTAL (cara de W cm)
-    # ─────────────────────────────────────────────────────────────
-    FRONT_X = D + 30
+    # ════════════════════════════════════════════════════════════════
+    # BLOQUE 3: VISTA FRONTAL (cara W)
+    # ════════════════════════════════════════════════════════════════
+    FRONT_X = D + 35.0
     FRONT_Y = LAT_Y
 
-    ent += _rect(FRONT_X, FRONT_Y, W, VIEW_H, "SECCION")
+    # Contorno
+    doc.rect(FRONT_X, FRONT_Y, W, VIEW_H, "SECCION", lw=70)
 
-    # Muescas asimétricas (vista frontal)
-    n2w = W * 0.26
-    ent += _rect(FRONT_X, FRONT_Y+VIEW_H, n2w, notch_h+2, "SECCION")
-    ent += _rect(FRONT_X+W*0.42, FRONT_Y+VIEW_H, W*0.30, notch_h+2, "SECCION")
-    ent += _rect(FRONT_X+W-n2w, FRONT_Y+VIEW_H, n2w, notch_h, "SECCION")
+    # Muescas superiores (asimétricas — 3 dientes)
+    FNW  = W * 0.22
+    FGAP = W * 0.25
+    top_y_f = FRONT_Y + VIEW_H
+    doc.lwpolyline([
+        (FRONT_X, top_y_f),
+        (FRONT_X, top_y_f+NOTCH),
+        (FRONT_X+FNW, top_y_f+NOTCH),
+        (FRONT_X+FNW, top_y_f),
+        (FRONT_X+FNW+FGAP, top_y_f),
+        (FRONT_X+FNW+FGAP, top_y_f+NOTCH),
+        (FRONT_X+W-FNW, top_y_f+NOTCH),
+        (FRONT_X+W-FNW, top_y_f),
+        (FRONT_X+W, top_y_f),
+    ], "SECCION", closed=False, lw=50)
 
-    ent += _rect(FRONT_X, FRONT_Y-notch_h-2, n2w, notch_h+2, "SECCION")
-    ent += _rect(FRONT_X+W*0.42, FRONT_Y-notch_h, W*0.30, notch_h, "SECCION")
-    ent += _rect(FRONT_X+W-n2w, FRONT_Y-notch_h, n2w, notch_h, "SECCION")
+    bot_y_f = FRONT_Y
+    doc.lwpolyline([
+        (FRONT_X, bot_y_f),
+        (FRONT_X, bot_y_f-NOTCH),
+        (FRONT_X+FNW, bot_y_f-NOTCH),
+        (FRONT_X+FNW, bot_y_f),
+        (FRONT_X+FNW+FGAP, bot_y_f),
+        (FRONT_X+FNW+FGAP, bot_y_f-NOTCH),
+        (FRONT_X+W-FNW, bot_y_f-NOTCH),
+        (FRONT_X+W-FNW, bot_y_f),
+        (FRONT_X+W, bot_y_f),
+    ], "SECCION", closed=False, lw=50)
 
     # Zona picada frontal
-    mid_yf = FRONT_Y + VIEW_H/2
-    zone_top_f = mid_yf + ih/2
-    zone_bot_f = mid_yf - ih/2
+    mid_y_f = FRONT_Y + VIEW_H/2
+    zt_f = mid_y_f + ih/2
+    zb_f = mid_y_f - ih/2
 
-    ent += _irregular_zone_border(FRONT_X, zone_top_f, FRONT_X+W, zone_top_f, 1.8, 14, "ZONA_PICADA")
-    ent += _irregular_zone_border(FRONT_X, zone_bot_f, FRONT_X+W, zone_bot_f, 1.8, 14, "ZONA_PICADA")
+    top_border_f = _irregular_border_pts(FRONT_X, zt_f, FRONT_X+W, zt_f, 2.0, 14)
+    bot_border_f = _irregular_border_pts(FRONT_X, zb_f, FRONT_X+W, zb_f, 2.0, 14)
+    doc.zona_picada_boundary(top_border_f, "ZONA_PICADA")
+    doc.zona_picada_boundary(bot_border_f, "ZONA_PICADA")
+    doc.line(FRONT_X, zb_f, FRONT_X, zt_f, "ZONA_PICADA")
+    doc.line(FRONT_X+W, zb_f, FRONT_X+W, zt_f, "ZONA_PICADA")
 
     # 5 barras frontales (líneas verticales)
-    for i in range(bf):
+    for i in range(nbf):
         bx = FRONT_X + cf + i * sp_f
-        ent += _line(bx, zone_bot_f - 2, bx, zone_top_f + 2, "ARMADURA_LONG")
+        doc.bar_elevation(bx, zb_f-1.5, zt_f+1.5, df, "ARMADURA_LONG")
 
-    # Estribos
-    ent += _line(FRONT_X, zone_top_f, FRONT_X+W, zone_top_f, "ESTRIBOS")
-    ent += _line(FRONT_X, zone_bot_f, FRONT_X+W, zone_bot_f, "ESTRIBOS")
+    # 2 estribos
+    doc.stirrup_elevation(FRONT_X, zt_f, FRONT_X+W, "ESTRIBOS")
+    doc.stirrup_elevation(FRONT_X, zb_f, FRONT_X+W, "ESTRIBOS")
 
-    # Cotas frontal
-    ent += _dim_horizontal(FRONT_X, FRONT_Y, FRONT_X+W, FRONT_Y-15, f"{W}", "COTAS")
-    cx2 = FRONT_X + cf
-    ent += _dim_horizontal(FRONT_X, FRONT_Y, cx2, FRONT_Y-8, f"{cf}", "COTAS")
-    for i in range(bf-1):
-        ent += _dim_horizontal(cx2+i*sp_f, FRONT_Y, cx2+(i+1)*sp_f, FRONT_Y-8, f"{sp_f:.0f}", "COTAS")
-    ent += _dim_horizontal(cx2+(bf-1)*sp_f, FRONT_Y, FRONT_X+W, FRONT_Y-8, f"{cf}", "COTAS")
-    ent += _dim_vertical(FRONT_X+W, zone_bot_f, zone_top_f, FRONT_X+W+15, f"{ih}", "COTAS")
+    # Cotas vista frontal
+    doc.dim_h(FRONT_X, FRONT_X+W, FRONT_Y-14, FRONT_Y, str(int(W)), "COTAS")
+    doc.dim_h(FRONT_X, FRONT_X+cf, FRONT_Y-8, FRONT_Y, str(int(cf)), "COTAS")
+    pos = FRONT_X+cf
+    for i in range(nbf-1):
+        doc.dim_h(pos, pos+sp_f, FRONT_Y-8, FRONT_Y, f"{sp_f:.0f}", "COTAS")
+        pos += sp_f
+    doc.dim_h(pos, FRONT_X+W, FRONT_Y-8, FRONT_Y, str(int(cf)), "COTAS")
+    doc.dim_v(zb_f, zt_f, FRONT_X+W+14, FRONT_X+W, str(int(ih)), "COTAS")
 
-    ent += _mtext_leader(FRONT_X+W+35, mid_yf, FRONT_X+W, zone_top_f,
-                         [f"{bf} Barres O{data.bars_front_diam:.0f}mm", f"O{data.stirrup_diam:.0f} mm"],
-                         layer="TEXTO")
-    ent += _view_title(FRONT_X + W/2 - 15, FRONT_Y - 25, "VISTA FRONTAL")
+    doc.label_arrow(FRONT_X+W, zt_f-ih*0.3, FRONT_X+W+35, zt_f+5,
+                    [f"{nbf} Barres Ø{df:.0f}mm", f"Ø{ds:.0f} mm"],
+                    "TEXTO", h=2.5)
+    doc.title(FRONT_X+W/2, FRONT_Y-26, "VISTA FRONTAL")
 
-    # Cajetín
-    ent += _cajetin(FRONT_X + W + 50, FRONT_Y - 25,
-                    eid, "Pilar Rectangular", data.notes or "")
+    # ── Cajetín ──
+    caj_x = FRONT_X + W + 50
+    caj_y = FRONT_Y - 28
+    doc.cajetin(caj_x, caj_y, _cajetin_data(data))
 
-    return build_dxf_manual([ent])
+    return doc.to_buffer()
 
 
 def generate_dxf_pillar_circ(data) -> io.BytesIO:
-    """
-    Pilar circular — Sección en planta + 2 alzados
-    """
-    R = data.diameter / 2
-    cov = data.cover
-    nb  = data.bars_count
-    r_bar = data.bars_diam / 20
-    r_stir = data.bars_diam / 20
-    ih  = data.inspection_height
-    eid = data.element_id or "PC-01"
+    diam = float(data.diameter)
+    R    = diam / 2
+    cov  = float(data.cover)
+    nb   = int(data.bars_count)
+    db   = float(data.bars_diam)
+    ds   = float(data.stirrup_diam)
+    ih   = float(data.inspection_height)
+    r_b  = db / 20
 
-    ent = ""
+    doc = DXFDoc()
 
-    # ── SECCIÓN EN PLANTA ──
-    PX, PY = 0, 0
+    # Sección en planta
+    doc.circle(0, 0, R, "SECCION", lw=70)
+    doc.circle(0, 0, R-cov, "ESTRIBOS")
+    for i in range(nb):
+        ang = math.radians(360*i/nb + 90)
+        bx = (R-cov)*math.cos(ang); by = (R-cov)*math.sin(ang)
+        doc.bar_section(bx, by, r_b, "ARMADURA_LONG")
 
-    # Círculo exterior
-    ent += _circle(PX, PY, R, "SECCION")
-    # Estribo circular (espiral)
-    ent += _circle(PX, PY, R - cov, "ESTRIBOS")
-
-    # Zona picada: media luna inferior-izquierda
-    arc_pts = []
-    for deg in range(180, 361, 10):
+    # Zona picada — semi-círculo inferior-izquierdo
+    zp_pts = []
+    for deg in range(180, 361, 8):
         rad = math.radians(deg)
-        arc_pts.append((PX + R*0.85*math.cos(rad), PY + R*0.85*math.sin(rad)))
-    ent += _irregular_border(arc_pts, "ZONA_PICADA")
+        zp_pts.append((R*0.88*math.cos(rad), R*0.88*math.sin(rad)))
+    doc.zona_picada_boundary(zp_pts, "ZONA_PICADA")
 
-    # Barras longitudinales (distribuidas uniformemente)
-    r_arm = R - cov
+    doc.dim_h(-R, R, -R-14, -R, f"Ø{diam:.0f}", "COTAS")
+    doc.label_arrow(R*0.7, R*0.7, R+30, R*0.8,
+                    [f"{nb} Barres Ø{db:.0f}mm", f"Espiral Ø{ds:.0f}mm", f"Recub: {cov}cm"],
+                    "TEXTO")
+    doc.title(0, R+8, "SECCIO EN PLANTA")
+
+    # Alzado
+    AX, AY = -R-20, -(ih+75)
+    VH = ih+65
+    doc.rect(AX, AY, diam, VH, "SECCION", lw=70)
+    mid_ya = AY + VH/2
+    zt_a = mid_ya + ih/2; zb_a = mid_ya - ih/2
+    doc.zona_picada_boundary(_irregular_border_pts(AX, zt_a, AX+diam, zt_a, 1.5, 10), "ZONA_PICADA")
+    doc.zona_picada_boundary(_irregular_border_pts(AX, zb_a, AX+diam, zb_a, 1.5, 10), "ZONA_PICADA")
+
     for i in range(nb):
         ang = math.radians(360*i/nb + 90)
-        bx = PX + r_arm * math.cos(ang)
-        by = PY + r_arm * math.sin(ang)
-        ent += _bar_section(bx, by, r_bar, "ARMADURA_LONG")
+        bx = AX+R + (R-cov)*math.cos(ang)
+        doc.bar_elevation(bx, zb_a-1.5, zt_a+1.5, db, "ARMADURA_LONG")
 
-    # Cotas
-    ent += _dim_horizontal(PX-R, PY, PX+R, PY-R-15, f"O{data.diameter:.0f}", "COTAS")
-    ent += _dim_horizontal(PX-r_arm, PY, PX+r_arm, PY-R-8, f"O{(R-cov)*2:.0f}", "COTAS")
-    ent += _mtext_leader(R+30, PY+10, R*0.7, PY+R*0.7,
-                         [f"{nb} Barres O{data.bars_diam:.0f}mm",
-                          f"Espiral O{data.stirrup_diam:.0f}mm",
-                          f"Recub: {cov}cm"], layer="TEXTO")
-    ent += _view_title(-15, R+8, "SECCIO EN PLANTA")
-
-    # ── ALZADO (frontal) ──
-    AX, AY = -R - 20, -(ih+80)
-    VIEW_H = ih + 60
-    ent += _rect(AX, AY, data.diameter, VIEW_H, "SECCION")
-
-    mid_a = AY + VIEW_H/2
-    zt = mid_a + ih/2
-    zb = mid_a - ih/2
-
-    ent += _irregular_zone_border(AX, zt, AX+data.diameter, zt, 1.5, 10, "ZONA_PICADA")
-    ent += _irregular_zone_border(AX, zb, AX+data.diameter, zb, 1.5, 10, "ZONA_PICADA")
-
-    # Barras en alzado (todas en la misma altura)
-    r_az = R - cov
-    for i in range(nb):
-        ang = math.radians(360*i/nb + 90)
-        bx = AX + R + r_az * math.cos(ang)
-        ent += _line(bx, zb-2, bx, zt+2, "ARMADURA_LONG")
-
-    ent += _line(AX, zt, AX+data.diameter, zt, "ESTRIBOS")
-    ent += _line(AX, zb, AX+data.diameter, zb, "ESTRIBOS")
-
-    ent += _dim_horizontal(AX, AY, AX+data.diameter, AY-15, f"O{data.diameter:.0f}", "COTAS")
-    ent += _dim_vertical(AX+data.diameter, zb, zt, AX+data.diameter+15, f"{ih}", "COTAS")
-    ent += _view_title(AX + R - 15, AY-25, "ALZADO")
-
-    ent += _cajetin(AX + data.diameter + 40, AY - 25,
-                    eid, "Pilar Circular", data.notes or "")
-
-    return build_dxf_manual([ent])
+    doc.stirrup_elevation(AX, zt_a, AX+diam, "ESTRIBOS")
+    doc.stirrup_elevation(AX, zb_a, AX+diam, "ESTRIBOS")
+    doc.dim_h(AX, AX+diam, AY-14, AY, f"Ø{diam:.0f}", "COTAS")
+    doc.dim_v(zb_a, zt_a, AX+diam+14, AX+diam, str(int(ih)), "COTAS")
+    doc.cajetin(AX+diam+50, AY-28, _cajetin_data(data))
+    doc.title(AX+R, AY-26, "ALZAT")
+    return doc.to_buffer()
 
 
 def generate_dxf_beam(data) -> io.BytesIO:
-    """
-    Viga rectangular — Sección transversal + Alzado con zona inspeccionada
-    """
-    W  = data.width
-    H  = data.height
-    cov = data.cover
-    nb_bot = data.bars_bottom_count
-    nb_top = data.bars_top_count
-    diam_b = data.bars_bottom_diam / 10
-    diam_t = data.bars_top_diam / 10
-    diam_s = data.stirrup_diam / 10
-    sp_s   = data.stirrup_spacing
-    il     = data.inspection_length
-    eid    = data.element_id or "V-01"
+    W    = float(data.width)
+    H    = float(data.height)
+    cov  = float(data.cover)
+    nbb  = int(data.bars_bottom_count)
+    nbt  = int(data.bars_top_count)
+    dbb  = float(data.bars_bottom_diam)
+    dbt  = float(data.bars_top_diam)
+    ds   = float(data.stirrup_diam)
+    sp_s = float(data.stirrup_spacing)
+    il   = float(data.inspection_length)
 
-    ent = ""
+    sp_bot = (W-2*cov)/(nbb-1) if nbb > 1 else 0
+    sp_top = (W-2*cov)/(nbt-1) if nbt > 1 else 0
 
-    # Separaciones barras
-    inner_W = W - 2*cov
-    sp_bot = inner_W / (nb_bot - 1) if nb_bot > 1 else 0
-    sp_top = inner_W / (nb_top - 1) if nb_top > 1 else 0
+    doc = DXFDoc()
 
-    # ── SECCIÓN TRANSVERSAL ──
-    SX, SY = 0, 0
-    ent += _rect(SX, SY, W, H, "SECCION")
-    ent += _stirrup_rect(SX+cov-diam_s, SY+cov-diam_s,
-                         W-2*(cov-diam_s), H-2*(cov-diam_s), 0.8, "ESTRIBOS")
+    # Sección transversal
+    doc.rect(0, 0, W, H, "SECCION", lw=70)
+    doc.stirrup_rect(cov-ds/10, cov-ds/10, W-2*(cov-ds/10), H-2*(cov-ds/10), 0.6, "ESTRIBOS")
+    for i in range(nbb):
+        doc.bar_section(cov+i*sp_bot, cov, dbb/20, "ARMADURA_LONG")
+    for i in range(nbt):
+        doc.bar_section(cov+i*sp_top, H-cov, dbt/20, "ARMADURA_LONG")
 
-    # Zona picada (franja derecha de la sección — cara inspeccionada)
-    zp = [
-        (SX+W*0.45, SY),
-        (SX+W*0.52, SY+H*0.12),
-        (SX+W*0.58, SY+H*0.30),
-        (SX+W*0.60, SY+H*0.55),
-        (SX+W*0.55, SY+H*0.75),
-        (SX+W*0.48, SY+H*0.90),
-        (SX+W*0.45, SY+H),
-        (SX+W, SY+H),
-        (SX+W, SY),
-        (SX+W*0.45, SY),
-    ]
-    ent += _irregular_border(zp, "ZONA_PICADA")
+    # Zona picada sección (cara lateral derecha)
+    zp_sec = (
+        _irregular_border_pts(W*0.45, 0, W, 0, 0.8, 4) +
+        [(W, H)] +
+        list(reversed(_irregular_border_pts(W*0.45, H, W, H, 0.8, 4))) +
+        [(W*0.45, H), (W*0.45, 0)]
+    )
+    doc.zona_picada_boundary(zp_sec[:-1], "ZONA_PICADA")
 
-    # Barras inferiores
-    for i in range(nb_bot):
-        bx = SX + cov + i * sp_bot
-        by = SY + cov
-        ent += _bar_section(bx, by, diam_b/2, "ARMADURA_LONG")
+    doc.dim_h(0, W, -14, 0, str(int(W)), "COTAS")
+    doc.dim_h(0, cov, -8, 0, str(int(cov)), "COTAS")
+    if nbb > 1:
+        doc.dim_h(cov, cov+sp_bot, -8, 0, f"{sp_bot:.0f}", "COTAS")
+    doc.dim_v(0, H, W+14, W, str(int(H)), "COTAS")
+    doc.dim_v(0, cov, W+8, W, str(int(cov)), "COTAS")
+    doc.label_arrow(W, cov, W+35, 5,
+                    [f"{nbb}Ø{dbb:.0f} inf.", f"{nbt}Ø{dbt:.0f} sup.", f"Estreps Ø{ds:.0f}@{sp_s:.0f}cm"],
+                    "TEXTO")
+    doc.title(W/2, H+8, "SECCIO TRANSVERSAL")
 
-    # Barras superiores
-    for i in range(nb_top):
-        bx = SX + cov + i * sp_top
-        by = SY + H - cov
-        ent += _bar_section(bx, by, diam_t/2, "ARMADURA_LONG")
+    # Alzado longitudinal
+    mg = H*0.8
+    TL = il + 2*mg
+    AX = W + 40; AY = 0
+    doc.rect(AX, AY, TL, H, "SECCION", lw=70)
+    doc.zona_picada_boundary(_irregular_border_pts(AX+mg, AY+H, AX+mg+il, AY+H, 2.0, 12), "ZONA_PICADA")
+    doc.zona_picada_boundary(_irregular_border_pts(AX+mg, AY, AX+mg+il, AY, 2.0, 12), "ZONA_PICADA")
+    doc.line(AX+mg, AY, AX+mg, AY+H, "ZONA_PICADA")
+    doc.line(AX+mg+il, AY, AX+mg+il, AY+H, "ZONA_PICADA")
 
-    # Cotas sección
-    ent += _dim_horizontal(SX, SY, SX+W, SY-15, f"{W}", "COTAS")
-    ent += _dim_vertical(SX+W, SY, SY+H, SX+W+15, f"{H}", "COTAS")
-    ent += _dim_vertical(SX+W, SY, SY+cov, SX+W+8, f"{cov}", "COTAS")
-    ent += _dim_vertical(SX+W, SY+H-cov, SY+H, SX+W+8, f"{cov}", "COTAS")
+    doc.line(AX, AY+cov, AX+TL, AY+cov, "ARMADURA_LONG", lw=int(dbb*8))
+    doc.line(AX, AY+H-cov, AX+TL, AY+H-cov, "ARMADURA_LONG", lw=int(dbt*8))
 
-    ent += _mtext_leader(SX+W+35, SY+cov+5, SX+W, SY+cov,
-                         [f"{nb_bot} Barres O{data.bars_bottom_diam:.0f}mm (inf)",
-                          f"{nb_top} Barres O{data.bars_top_diam:.0f}mm (sup)",
-                          f"Estreps O{data.stirrup_diam:.0f}mm c/{sp_s}cm"], layer="TEXTO")
-    ent += _view_title(SX + W/2 - 12, SY+H+8, "SECCIO TRANSVERSAL")
+    ns = int(TL/sp_s)+1
+    for i in range(ns):
+        sx = AX + i*sp_s
+        if sx <= AX+TL:
+            doc.line(sx, AY+cov-1, sx, AY+H-cov+1, "ESTRIBOS")
 
-    # ── ALZADO LONGITUDINAL ──
-    ALX = W + 40
-    ALY = SY
-
-    # Cuerpo viga (longitud = inspection_length + 2*margen)
-    margin = H * 0.8
-    total_L = il + 2*margin
-
-    ent += _rect(ALX, ALY, total_L, H, "SECCION")
-
-    # Zona picada alzado (franja central)
-    ent += _irregular_zone_border(ALX+margin, ALY+H, ALX+margin+il, ALY+H, 2.0, 12, "ZONA_PICADA")
-    ent += _irregular_zone_border(ALX+margin, ALY, ALX+margin+il, ALY, 2.0, 12, "ZONA_PICADA")
-    ent += _line(ALX+margin, ALY, ALX+margin, ALY+H, "ZONA_PICADA")
-    ent += _line(ALX+margin+il, ALY, ALX+margin+il, ALY+H, "ZONA_PICADA")
-
-    # Barras longitudinales (líneas horizontales en alzado)
-    ent += _line(ALX, ALY+cov, ALX+total_L, ALY+cov, "ARMADURA_LONG")
-    ent += _line(ALX, ALY+H-cov, ALX+total_L, ALY+H-cov, "ARMADURA_LONG")
-
-    # Estribos (líneas verticales con separación)
-    n_stirrups = int(total_L / sp_s) + 1
-    for i in range(n_stirrups):
-        sx = ALX + i * sp_s
-        if sx <= ALX + total_L:
-            ent += _line(sx, ALY+cov-1, sx, ALY+H-cov+1, "ESTRIBOS")
-
-    # Cotas alzado
-    ent += _dim_horizontal(ALX+margin, ALY, ALX+margin+il, ALY-15, f"{il}", "COTAS")
-    ent += _dim_horizontal(ALX, ALY, ALX+margin, ALY-8, f"{margin:.0f}", "COTAS")
-    ent += _dim_vertical(ALX+total_L, ALY, ALY+H, ALX+total_L+15, f"{H}", "COTAS")
-
-    ent += _view_title(ALX + total_L/2 - 15, ALY+H+8, "ALZAT (ZONA INSPECCIO)")
-
-    ent += _cajetin(ALX + total_L + 20, ALY - 25,
-                    eid, "Viga Rectangular", data.notes or "")
-
-    return build_dxf_manual([ent])
+    doc.dim_h(AX+mg, AX+mg+il, AY-14, AY, str(int(il)), "COTAS")
+    doc.dim_v(AY, AY+H, AX+TL+14, AX+TL, str(int(H)), "COTAS")
+    doc.title(AX+TL/2, AY+H+8, "ALZAT (ZONA INSPECCIO)")
+    doc.cajetin(AX+TL+20, AY-28, _cajetin_data(data))
+    return doc.to_buffer()
 
 
 def generate_dxf_footing(data) -> io.BytesIO:
-    """
-    Zapata aislada — Sección en planta + 2 secciones transversales
-    """
-    L   = data.length
-    WW  = data.width
-    H   = data.height
-    cb  = data.cover_bottom
-    cs  = data.cover_sides
-    nx  = data.bars_x_count
-    ny  = data.bars_y_count
-    dx  = data.bars_x_diam / 10
-    dy  = data.bars_y_diam / 10
-    eid = data.element_id or "Z-01"
+    L   = float(data.length)
+    WW  = float(data.width)
+    H   = float(data.height)
+    cb  = float(data.cover_bottom)
+    cs  = float(data.cover_sides)
+    nx  = int(data.bars_x_count)
+    ny  = int(data.bars_y_count)
+    dx  = float(data.bars_x_diam)
+    dy  = float(data.bars_y_diam)
+    pw  = float(getattr(data, 'pedestal_w', 40) or 40)
+    pd  = float(getattr(data, 'pedestal_d', 40) or 40)
 
-    ent = ""
+    sp_x = (L-2*cs)/(nx-1) if nx>1 else 0
+    sp_y = (WW-2*cs)/(ny-1) if ny>1 else 0
 
-    # Separaciones
-    sp_x = (L - 2*cs) / (nx - 1) if nx > 1 else 0
-    sp_y = (WW - 2*cs) / (ny - 1) if ny > 1 else 0
+    doc = DXFDoc()
 
-    # ── SECCIÓN EN PLANTA ──
-    PX, PY = 0, 0
-    ent += _rect(PX, PY, L, WW, "SECCION")
-
-    # Zona picada (esquina inferior-izquierda en planta)
-    zp_foot = [
-        (PX,          PY + WW*0.5),
-        (PX + L*0.25, PY + WW*0.75),
-        (PX + L*0.5,  PY + WW*0.85),
-        (PX + L*0.65, PY + WW),
-        (PX,          PY + WW),
-        (PX,          PY + WW*0.5),
-    ]
-    ent += _irregular_border(zp_foot, "ZONA_PICADA")
-
-    # Armadura X (barras en dirección X, paralelas al lado largo)
-    for i in range(ny):
-        by = PY + cs + i * sp_y
-        ent += _line(PX + cs, by, PX + L - cs, by, "ARMADURA_LONG")
-
-    # Armadura Y (barras en dirección Y)
+    # Planta armadura
+    doc.rect(0, 0, L, WW, "SECCION", lw=70)
+    # Pilar centrado (rectángulo)
+    doc.rect((L-pw)/2, (WW-pd)/2, pw, pd, "SECCION", lw=35)
     for i in range(nx):
-        bx = PX + cs + i * sp_x
-        ent += _line(bx, PY + cs, bx, PY + WW - cs, "ARMADURA_LONG")
-
-    # Cotas planta
-    ent += _dim_horizontal(PX, PY, PX+L, PY-15, f"{L}", "COTAS")
-    ent += _dim_vertical(PX+L, PY, PY+WW, PX+L+15, f"{WW}", "COTAS")
-    ent += _dim_horizontal(PX, PY, PX+cs, PY-8, f"{cs}", "COTAS")
-    ent += _dim_horizontal(PX+cs, PY, PX+cs+sp_x, PY-8, f"{sp_x:.0f}", "COTAS")
-
-    ent += _mtext_leader(PX+L+35, PY+WW*0.7, PX+L, PY+WW*0.8,
-                         [f"{nx}O{data.bars_x_diam:.0f} dir.X",
-                          f"{ny}O{data.bars_y_diam:.0f} dir.Y",
-                          f"Recub lat: {cs}cm"], layer="TEXTO")
-    ent += _view_title(PX + L/2 - 15, PY+WW+8, "PLANTA ARMADURA")
-
-    # ── SECCIÓN X-X ──
-    SXX_X = -10
-    SXX_Y = -(H + 60)
-
-    ent += _rect(SXX_X, SXX_Y, L, H, "SECCION")
-
-    # Barras dir-X (sección transversal = puntos)
-    for i in range(nx):
-        bx = SXX_X + cs + i * sp_x
-        by = SXX_Y + cb
-        ent += _bar_section(bx, by, dx/2, "ARMADURA_LONG")
-
-    ent += _dim_horizontal(SXX_X, SXX_Y, SXX_X+L, SXX_Y-15, f"{L}", "COTAS")
-    ent += _dim_vertical(SXX_X+L, SXX_Y, SXX_Y+H, SXX_X+L+15, f"{H}", "COTAS")
-    ent += _dim_vertical(SXX_X+L, SXX_Y, SXX_Y+cb, SXX_X+L+8, f"{cb}", "COTAS")
-    ent += _view_title(SXX_X + L/2 - 10, SXX_Y+H+6, "SECCIO X-X")
-
-    # ── SECCIÓN Y-Y ──
-    SYY_X = L + 30
-    SYY_Y = -(H + 60)
-
-    ent += _rect(SYY_X, SYY_Y, WW, H, "SECCION")
-
+        bx = cs + i*sp_x
+        doc.line(bx, cs, bx, WW-cs, "ARMADURA_LONG", lw=int(dx*7))
     for i in range(ny):
-        bx = SYY_X + cs + i * sp_y
-        by = SYY_Y + cb
-        ent += _bar_section(bx, by, dy/2, "ARMADURA_LONG")
+        by = cs + i*sp_y
+        doc.line(cs, by, L-cs, by, "ARMADURA_LONG", lw=int(dy*7))
 
-    ent += _dim_horizontal(SYY_X, SYY_Y, SYY_X+WW, SYY_Y-15, f"{WW}", "COTAS")
-    ent += _dim_vertical(SYY_X+WW, SYY_Y, SYY_Y+H, SYY_X+WW+15, f"{H}", "COTAS")
-    ent += _view_title(SYY_X + WW/2 - 10, SYY_Y+H+6, "SECCIO Y-Y")
+    zp = ([(0,WW*0.5)] +
+          _irregular_border_pts(0,WW*0.5, L*0.55,WW,1.5,6) +
+          [(L*0.55,WW),(0,WW),(0,WW*0.5)])
+    doc.zona_picada_boundary(zp, "ZONA_PICADA")
 
-    ent += _cajetin(SYY_X + WW + 20, SYY_Y - 25,
-                    eid, "Zapata Aillada", data.notes or "")
+    doc.dim_h(0, L, -14, 0, str(int(L)), "COTAS")
+    doc.dim_h(0, cs, -8, 0, str(int(cs)), "COTAS")
+    if nx>1: doc.dim_h(cs, cs+sp_x, -8, 0, f"{sp_x:.0f}", "COTAS")
+    doc.dim_v(0, WW, L+14, L, str(int(WW)), "COTAS")
+    doc.label_arrow(L*0.8, WW*0.8, L+35, WW*0.7,
+                    [f"{nx}Ø{dx:.0f} dir.X", f"{ny}Ø{dy:.0f} dir.Y",
+                     f"Recub lat:{cs}cm / inf:{cb}cm"], "TEXTO")
+    doc.title(L/2, WW+8, "PLANTA ARMADURA")
 
-    return build_dxf_manual([ent])
+    # Sección X-X
+    SXX, SXY = 0, -(H+50)
+    doc.rect(SXX, SXY, L, H, "SECCION", lw=70)
+    for i in range(nx):
+        bx = SXX+cs+i*sp_x
+        doc.bar_section(bx, SXY+cb, dx/20, "ARMADURA_LONG")
+    doc.dim_h(SXX, SXX+L, SXY-14, SXY, str(int(L)), "COTAS")
+    doc.dim_v(SXY, SXY+H, SXX+L+14, SXX+L, str(int(H)), "COTAS")
+    doc.dim_v(SXY, SXY+cb, SXX+L+8, SXX+L, str(int(cb)), "COTAS")
+    doc.title(SXX+L/2, SXY+H+8, "SECCIO X-X")
+
+    # Sección Y-Y
+    SYX, SYY = L+30, SXY
+    doc.rect(SYX, SYY, WW, H, "SECCION", lw=70)
+    for i in range(ny):
+        bx = SYX+cs+i*sp_y
+        doc.bar_section(bx, SYY+cb, dy/20, "ARMADURA_LONG")
+    doc.dim_h(SYX, SYX+WW, SYY-14, SYY, str(int(WW)), "COTAS")
+    doc.dim_v(SYY, SYY+H, SYX+WW+14, SYX+WW, str(int(H)), "COTAS")
+    doc.title(SYX+WW/2, SYY+H+8, "SECCIO Y-Y")
+
+    doc.cajetin(SYX+WW+20, SYY-28, _cajetin_data(data))
+    return doc.to_buffer()
 
 
 def generate_dxf_forjado(data) -> io.BytesIO:
-    """Forjado / Losa maciza — Sección transversal + planta armadura"""
-    th = data.thickness
-    nx = data.bars_x_count
-    ny = data.bars_y_count
-    dx = data.bars_x_diam / 10
-    dy = data.bars_y_diam / 10
-    sp_x = data.bars_x_spacing
-    sp_y = data.bars_y_spacing
-    cb  = data.cover_bottom
-    ct  = data.cover_top
-    eid = data.element_id or "F-01"
-    W_rep = max(nx * sp_x + 20, 120)
-    H_rep = max(ny * sp_y + 20, 100)
+    th  = float(data.thickness)
+    nx  = int(data.bars_x_count)
+    ny  = int(data.bars_y_count)
+    dx  = float(data.bars_x_diam)
+    dy  = float(data.bars_y_diam)
+    spx = float(data.bars_x_spacing)
+    spy = float(data.bars_y_spacing)
+    cb  = float(data.cover_bottom)
+    ct  = float(data.cover_top)
 
-    ent = ""
+    WR = max(nx*spx+20, 120)
+    HR = max(ny*spy+20, 100)
 
-    # ── SECCIÓN TRANSVERSAL ──
-    SX, SY = 0, 0
-    ent += _rect(SX, SY, W_rep, th, "SECCION")
-    # Barras inferiores
+    doc = DXFDoc()
+
+    # Sección transversal
+    doc.rect(0, 0, WR, th, "SECCION", lw=70)
     for i in range(nx):
-        bx = SX + 10 + i * sp_x
-        ent += _bar_section(bx, SY + cb, dx/2, "ARMADURA_LONG")
-    # Barras superiores
-    for i in range(nx):
-        bx = SX + 10 + i * sp_x
-        ent += _bar_section(bx, SY + th - ct, dx/2, "ARMADURA_LONG")
-    # Zona picada
-    ent += _irregular_zone_border(SX + W_rep*0.3, SY, SX + W_rep*0.7, SY, 1.0, 8, "ZONA_PICADA")
-    ent += _irregular_zone_border(SX + W_rep*0.3, SY+th, SX + W_rep*0.7, SY+th, 1.0, 8, "ZONA_PICADA")
-    ent += _line(SX + W_rep*0.3, SY, SX + W_rep*0.3, SY+th, "ZONA_PICADA")
-    ent += _line(SX + W_rep*0.7, SY, SX + W_rep*0.7, SY+th, "ZONA_PICADA")
+        bx = 10+i*spx
+        doc.bar_section(bx, cb, dx/20, "ARMADURA_LONG")
+        doc.bar_section(bx, th-ct, dx/20, "ARMADURA_LONG")
+    doc.zona_picada_boundary(_irregular_border_pts(WR*0.3,0,WR*0.7,0,0.8,6)+
+                              [(WR*0.7,th)]+list(reversed(_irregular_border_pts(WR*0.3,th,WR*0.7,th,0.8,6)))+
+                              [(WR*0.3,0)], "ZONA_PICADA")
+    doc.dim_h(0, WR, -14, 0, f"Repres. {WR:.0f}", "COTAS")
+    doc.dim_v(0, th, WR+12, WR, f"e={th:.0f}", "COTAS")
+    doc.title(WR/2, th+8, "SECCIO TRANSVERSAL")
 
-    ent += _dim_horizontal(SX, SY, SX+W_rep, SY-15, f"Rep. {W_rep:.0f}")
-    ent += _dim_vertical(SX+W_rep, SY, SY+th, SX+W_rep+12, f"e={th:.0f}")
-    ent += _dim_vertical(SX+W_rep, SY, SY+cb, SX+W_rep+6, f"{cb:.0f}")
-    ent += _text(SX + W_rep/2, SY+th+10, 3.5, "SECCIO TRANSVERSAL", "TEXTO")
-
-    # ── PLANTA ──
-    PLX, PLY = 0, -(H_rep + 40)
-    ent += _rect(PLX, PLY, W_rep, H_rep, "SECCION")
+    # Planta
+    PLX,PLY = 0, -(HR+40)
+    doc.rect(PLX, PLY, WR, HR, "SECCION", lw=70)
     for i in range(nx):
-        bx = PLX + 10 + i * sp_x
-        ent += _line(bx, PLY+5, bx, PLY+H_rep-5, "ARMADURA_LONG")
+        bx = PLX+10+i*spx
+        doc.line(bx, PLY+5, bx, PLY+HR-5, "ARMADURA_LONG", lw=int(dx*7))
     for i in range(ny):
-        by = PLY + 10 + i * sp_y
-        ent += _line(PLX+5, by, PLX+W_rep-5, by, "ARMADURA_LONG")
-    ent += _mtext_leader(PLX+W_rep+20, PLY+H_rep*0.3, PLX+W_rep, PLY+H_rep*0.5,
-                         [f"Arm. X: {nx}Ø{data.bars_x_diam:.0f}@{sp_x}cm",
-                          f"Arm. Y: {ny}Ø{data.bars_y_diam:.0f}@{sp_y}cm",
-                          f"Recub: inf={cb}cm / sup={ct}cm"], layer="TEXTO")
-    ent += _text(PLX + W_rep/2, PLY+H_rep+10, 3.5, "PLANTA ARMADURA", "TEXTO")
-    ent += _cajetin(PLX+W_rep+20, PLY-25, eid, f"Forjado — {data.forjado_type}", data.notes or "")
-    return build_dxf_manual([ent])
+        by = PLY+10+i*spy
+        doc.line(PLX+5, by, PLX+WR-5, by, "ARMADURA_LONG", lw=int(dy*7))
+    doc.label_arrow(PLX+WR, PLY+HR*0.6, PLX+WR+30, PLY+HR*0.7,
+                    [f"X: {nx}Ø{dx:.0f}@{spx}cm", f"Y: {ny}Ø{dy:.0f}@{spy}cm",
+                     f"Recub: inf={cb} / sup={ct}cm"], "TEXTO")
+    doc.title(PLX+WR/2, PLY+HR+8, "PLANTA ARMADURA")
+    doc.cajetin(PLX+WR+30, PLY-28, _cajetin_data(data))
+    return doc.to_buffer()
 
 
 def generate_dxf_stair(data) -> io.BytesIO:
-    """Escalera / Zanca — Sección longitudinal con peldaños + armadura"""
-    riser  = data.riser
-    tread  = data.tread
-    th     = data.slab_thickness
-    wt     = data.wall_thickness
-    n      = min(data.steps_count, 12)
-    cov    = data.cover
-    eid    = data.element_id or "ESC-01"
-    d_l    = data.bars_long_diam / 10
-    d_t    = data.bars_trans_diam / 10
+    riser = float(data.riser)
+    tread = float(data.tread)
+    th    = float(data.slab_thickness)
+    wt    = float(data.wall_thickness)
+    n     = min(int(data.steps_count), 12)
+    cov   = float(data.cover)
+    dl    = float(data.bars_long_diam)
+    dt    = float(data.bars_trans_diam)
+    sl    = float(data.bars_long_sep)
+    st    = float(data.bars_trans_sep)
 
-    ent = ""
+    ang   = math.atan2(n*riser, n*tread)
+    ox, oy = 20.0, n*riser + th + 20
 
-    OX, OY = 20, n*riser + th + 20
+    doc = DXFDoc()
 
-    # ── ZANCA (losa inclinada) ──
-    total_run  = n * tread
-    total_rise = n * riser
-    # Cara superior
-    top = [(OX + i*tread, OY - i*riser) for i in range(n+1)]
-    # Cara inferior (paralela, offset th)
-    import math
-    ang = math.atan2(total_rise, total_run)
-    off_x = math.sin(ang) * th
-    off_y = math.cos(ang) * th
-    bot = [(x + off_x, y + off_y) for (x,y) in top]
-
-    for i in range(len(top)-1):
-        ent += _line(top[i][0], top[i][1], top[i+1][0], top[i+1][1], "SECCION")
-    for i in range(len(bot)-1):
-        ent += _line(bot[i][0], bot[i][1], bot[i+1][0], bot[i+1][1], "SECCION")
-    ent += _line(top[0][0], top[0][1], bot[0][0], bot[0][1], "SECCION")
-    ent += _line(top[-1][0], top[-1][1], bot[-1][0], bot[-1][1], "SECCION")
-
-    # ── PELDAÑOS ──
+    # Cara superior zanca (peldaños)
+    cur_x, cur_y = ox, oy
+    top_pts = [(cur_x, cur_y)]
     for i in range(n):
-        px = OX + i*tread
-        py = OY - i*riser
-        # Pared vertical del peldaño (espesor wt)
-        ent += _line(px, py, px, py-riser, "SECCION")
-        ent += _line(px, py-riser, px+wt, py-riser, "SECCION")
-        # Relleno peldaño (zona picada en el peldaño inspeccionado)
-        if i == n//2:
-            zp_pts = [
-                (px, py), (px+tread, py), (px+tread, py-riser),
-                (px+wt, py-riser), (px+wt+2, py-riser+3),
-                (px+4, py-2), (px, py)
-            ]
-            ent += _irregular_border(zp_pts, "ZONA_PICADA")
+        top_pts.append((cur_x, cur_y - riser))
+        cur_y -= riser
+        top_pts.append((cur_x + tread, cur_y))
+        cur_x += tread
+    doc.lwpolyline(top_pts, "SECCION", lw=70)
 
-    # ── ARMADURA LONGITUDINAL (línea paralela a la zanca) ──
-    ang_cos, ang_sin = math.cos(ang), math.sin(ang)
-    for layer_offset in [cov, th-cov]:
-        ox2 = off_x * layer_offset/th
-        oy2 = off_y * layer_offset/th
-        x1 = top[0][0]+ox2+cov*ang_cos; y1 = top[0][1]+oy2-cov*ang_sin
-        x2 = top[-1][0]+ox2-cov*ang_cos; y2 = top[-1][1]+oy2+cov*ang_sin
-        ent += _line(x1, y1, x2, y2, "ARMADURA_LONG")
-        # Marcas de barra
-        for i in range(0, n+1, 2):
-            bx = top[i][0]+ox2; by = top[i][1]+oy2
-            ent += _circle(bx, by, d_l/2, "ARMADURA_LONG")
+    # Cara inferior zanca (paralela a la inclinación)
+    off_x = math.sin(ang)*th
+    off_y = math.cos(ang)*th
+    bot_start = (ox+off_x, oy+off_y)
+    bot_end   = (ox+n*tread+off_x, oy-n*riser+off_y)
+    doc.line(bot_start[0], bot_start[1], bot_end[0], bot_end[1], "SECCION", lw=70)
+    doc.line(top_pts[0][0], top_pts[0][1], bot_start[0], bot_start[1], "SECCION", lw=70)
+    doc.line(top_pts[-1][0], top_pts[-1][1], bot_end[0], bot_end[1], "SECCION", lw=70)
 
-    # ── COTAS ──
-    ent += _dim_horizontal(OX, OY+5, OX+tread, OY+5, f"{tread:.1f}")
-    ent += _dim_vertical(OX-8, OY-riser, OY, OX-8, f"{riser:.1f}")
-    ent += _dim_vertical(top[-1][0]+5, top[-1][1], top[-1][1]+th, top[-1][0]+5+12, f"{th:.0f}")
+    # Paredes verticales de peldaños (espesor wt)
+    for i in range(n):
+        px = ox + i*tread
+        py = oy - i*riser
+        doc.line(px, py-riser, px, py, "SECCION")
+        doc.line(px, py-riser, px+wt, py-riser, "SECCION")
 
-    ent += _mtext_leader(OX+total_run+30, OY-total_rise/2, OX+total_run, OY-total_rise/2,
-                         [f"Arm. long: Ø{data.bars_long_diam:.0f}@{data.bars_long_sep}cm",
-                          f"Arm. trans: Ø{data.bars_trans_diam:.0f}@{data.bars_trans_sep}cm",
-                          f"Recub: {cov}cm",
-                          f"Relleno peld: {data.relleno_type}"], layer="TEXTO")
-    if data.depth_no_rebar:
-        ent += _text(OX+total_run/2, OY-total_rise-15, 2.5,
-                     f"ATENCION: sin armadura hasta -{data.depth_no_rebar}cm", "TEXTO")
+    # Zona picada en peldaño central
+    mi = n//2
+    px_m = ox + mi*tread; py_m = oy - mi*riser
+    doc.zona_picada_boundary([
+        (px_m, py_m), (px_m+tread, py_m), (px_m+tread, py_m-riser),
+        (px_m+wt+1, py_m-riser), (px_m+wt+1, py_m-riser+2),
+        (px_m+3, py_m-1), (px_m, py_m)
+    ], "ZONA_PICADA")
 
-    ent += _text(OX + total_run/2, OY + 20, 3.5, "SECCIO LONGITUDINAL — ZANCA", "TEXTO")
-    ent += _cajetin(OX+total_run+30, OY-total_rise-30,
-                    eid, "Escalera / Zanca", data.notes or "")
-    return build_dxf_manual([ent])
+    # Armadura longitudinal (2 capas)
+    for off_factor in [cov/th, 1-cov/th]:
+        lx1 = ox + off_x*off_factor + cov*math.cos(ang)
+        ly1 = oy + off_y*off_factor - cov*math.sin(ang)
+        lx2 = ox + n*tread + off_x*off_factor - cov*math.cos(ang)
+        ly2 = oy - n*riser + off_y*off_factor + cov*math.sin(ang)
+        doc.line(lx1, ly1, lx2, ly2, "ARMADURA_LONG", lw=int(dl*8))
+
+    # Cotas principales
+    doc.dim_h(ox, ox+tread, oy+th+10, oy, f"{tread:.1f}", "COTAS")
+    doc.dim_v(oy-riser, oy, ox-15, ox, f"{riser:.1f}", "COTAS")
+    doc.dim_v(bot_end[1], bot_end[1]+th, ox+n*tread+15, ox+n*tread, f"{th:.0f}", "COTAS")
+
+    doc.label_arrow(ox+n*tread*0.6, oy-n*riser*0.5,
+                    ox+n*tread+35, oy-n*riser*0.5,
+                    [f"Arm. long: Ø{dl:.0f}@{sl}cm",
+                     f"Arm. trans: Ø{dt:.0f}@{st}cm",
+                     f"Recub: {cov}cm",
+                     f"Relleno: {getattr(data,'relleno_type','Mortero/Cascote')}"],
+                    "TEXTO")
+
+    if getattr(data, 'depth_no_rebar', None):
+        doc.text(ox+n*tread/2, oy-n*riser-15, 2.0,
+                 f"ATENCIO: sense armadura fins -{data.depth_no_rebar}cm", "TEXTO", 1)
+
+    doc.title(ox+n*tread/2, oy+th+20, "SECCIO LONGITUDINAL — ZANCA")
+    doc.cajetin(ox+n*tread+35, oy-n*riser-35, _cajetin_data(data))
+    return doc.to_buffer()
