@@ -28,6 +28,15 @@ export const appState = {
   // ── Bar geometry cache (rebuilt each redraw) ─────────────
   barPositions: [],      // [{ id,label,cx,cy,r,diam,type }]
 
+  // ── Bar selection (click-select tool) ────────────────────
+  selectedBars: [],      // [barId, ...]
+
+  // ── Custom stirrups (drawn by user) ──────────────────────
+  customStirrups: [],    // [{ barIds: [id, id, ...] }]
+
+  // ── Per-structure snapshots (preserved on struct switch) ─
+  structStates: {},      // { structId: { barStatus, cracks, annotations, customStirrups, formValues, pickImageData } }
+
   // ── Form values ─────────────────────────────────────────
   // Stored per-field: formValues[fieldId] = value
   // These persist across tab switches within the same struct.
@@ -48,7 +57,7 @@ export const appState = {
   apiUrl: '',
 };
 
-/** Call this when the user changes struct type. Clears inspection data only. */
+/** Call this when the user clicks 'Limpiar' — clears all canvas data. */
 export function resetInspectionData() {
   appState.barStatus = {};
   appState.cracks = [];
@@ -58,19 +67,64 @@ export function resetInspectionData() {
   appState.drawing = false;
   appState.lastPt = null;
   appState.draggingAnnotation = null;
+  appState.selectedBars = [];
+  appState.customStirrups = [];
   if (appState.pickedZone) {
     appState.pickedZone.getContext('2d')
       .clearRect(0, 0, appState.pickedZone.width, appState.pickedZone.height);
   }
 }
 
-/** Reset everything including form values */
+/** Reset everything including form values and history */
 export function resetAll() {
   resetInspectionData();
   appState.struct = null;
   appState.formValues = {};
   appState.barPositions = [];
   appState.history = [];
+  appState.structStates = {};
+}
+
+/**
+ * Snapshot current struct's canvas state so it can be restored when switching back.
+ * Call this BEFORE changing appState.struct.
+ */
+export function saveStructState(id) {
+  if (!id) return;
+  const pc = appState.pickedZone;
+  const pickImageData = (pc && pc.width > 0 && pc.height > 0)
+    ? pc.getContext('2d').getImageData(0, 0, pc.width, pc.height)
+    : null;
+  appState.structStates[id] = {
+    barStatus:      { ...appState.barStatus },
+    cracks:         appState.cracks.map(c => ({ ...c })),
+    annotations:    appState.annotations.map(a => ({ ...a })),
+    customStirrups: appState.customStirrups.map(s => ({ barIds: [...s.barIds] })),
+    formValues:     { ...appState.formValues },
+    pickImageData,
+  };
+}
+
+/**
+ * Restore a previously-saved struct state. Returns true if a snapshot existed.
+ * Call this AFTER changing appState.struct and re-creating the pick canvas.
+ */
+export function restoreStructState(id) {
+  const saved = appState.structStates[id];
+  if (!saved) return false;
+  appState.barStatus      = { ...saved.barStatus };
+  appState.cracks         = saved.cracks.map(c => ({ ...c }));
+  appState.annotations    = saved.annotations.map(a => ({ ...a }));
+  appState.customStirrups = saved.customStirrups.map(s => ({ barIds: [...s.barIds] }));
+  appState.formValues     = { ...saved.formValues };
+  appState.selectedBars   = [];
+  if (saved.pickImageData && appState.pickedZone) {
+    const pc = appState.pickedZone;
+    pc.width  = saved.pickImageData.width;
+    pc.height = saved.pickImageData.height;
+    pc.getContext('2d').putImageData(saved.pickImageData, 0, 0);
+  }
+  return true;
 }
 
 /** Definition of all structural types with their form schemas */

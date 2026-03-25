@@ -7,12 +7,13 @@
 import {
   appState, STRUCTS, getParams,
   resetInspectionData, resetAll as _resetAll,
+  saveStructState, restoreStructState,
 } from './state.js';
 
 import {
   initCanvas, resizeCV, initPickCanvas, fullRedraw,
-  paintAt, savePickState, undoCV, clearCV,
-  cvPos, hitTestAnnotation,
+  paintAt, savePickState, undoCV, clearCV as _clearCV,
+  cvPos, hitTestAnnotation, hitTestBar,
 } from './canvasEngine.js';
 
 import { exportDXF, exportCSV } from './api.js';
@@ -47,7 +48,14 @@ export function nav(id) {
    STRUCTURE SELECTION
 ════════════════════════════════════════════════════════ */
 export function selS(id) {
-  const isNewStruct = appState.struct !== id;
+  const prevStruct = appState.struct;
+
+  // Save canvas state for the structure we're leaving
+  if (prevStruct && prevStruct !== id) {
+    saveStructState(prevStruct);
+  }
+
+  const isNewStruct = prevStruct !== id;
   appState.struct = id;
 
   document.querySelectorAll('.sc').forEach(c => c.classList.remove('on'));
@@ -59,15 +67,18 @@ export function selS(id) {
   document.getElementById('fa').style.display = 'block';
 
   if (isNewStruct) {
-    resetInspectionData();
     initPickCanvas();
-    appState.formValues = {}; // reset form values for new struct type
+    if (!restoreStructState(id)) {
+      // First time visiting this struct — start fresh
+      resetInspectionData();
+      appState.formValues = {};
+    }
     appState.view = 'section';
     _syncViewButtons();
   }
 
   _curTab = 'geometria';
-  _renderTabs(id);
+  _renderTabs(id, isNewStruct);  // skip _saveFormValues when struct changed
   setStep(2);
   requestAnimationFrame(() => { fullRedraw(); updateBarStatusPanel(); });
 }
@@ -85,10 +96,10 @@ const _tabIcons = {
   obra:       `<svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12V6l5-4 5 4v6"/><rect x="5" y="8" width="4" height="4"/></svg>`,
 };
 
-function _renderTabs(id) {
+function _renderTabs(id, skipSave = false) {
   const def = STRUCTS[id];
-  // Save current values before destroying DOM
-  _saveFormValues();
+  // Save current values before destroying DOM (skip when struct just changed)
+  if (!skipSave) _saveFormValues();
   document.getElementById('ftabs').innerHTML = Object.keys(def.tabs).map(k =>
     `<div class="tab${k === _curTab ? ' on' : ''}" data-tab="${k}">${_tabIcons[k]}${_tabNames[k]}</div>`
   ).join('');
@@ -186,10 +197,11 @@ export function setTool(t) {
   document.querySelectorAll('.tool[id^="t-"]').forEach(b => b.classList.remove('on'));
   document.getElementById('t-' + t)?.classList.add('on');
 
-  // Show annotation input helper
   const cvCont = document.getElementById('cvCont');
   if (t === 'annotate') {
     cvCont.style.cursor = 'crosshair';
+  } else if (t === 'select-bar') {
+    cvCont.style.cursor = 'pointer';
   } else {
     cvCont.style.cursor = '';
     _hideAnnotationInput();
@@ -202,7 +214,12 @@ export function setBrush(s) {
   document.getElementById('b-' + (s <= 10 ? 's' : s <= 22 ? 'm' : 'l'))?.classList.add('on');
 }
 
-export { undoCV, clearCV };
+export { undoCV };
+export function clearCV() {
+  _clearCV();
+  updateCrackList();
+  _updateEstriboBtnState();
+}
 
 /* ════════════════════════════════════════════════════════
    CANVAS EVENT HANDLERS
@@ -225,6 +242,19 @@ function _cvDown(e) {
 
   if (appState.tool === 'annotate') {
     _showAnnotationInput(pos.x, pos.y);
+    return;
+  }
+
+  // Bar selection tool
+  if (appState.tool === 'select-bar') {
+    const barId = hitTestBar(pos.x, pos.y);
+    if (barId !== null) {
+      const idx = appState.selectedBars.indexOf(barId);
+      if (idx >= 0) appState.selectedBars.splice(idx, 1);
+      else          appState.selectedBars.push(barId);
+      fullRedraw();
+      _updateEstriboBtnState();
+    }
     return;
   }
 
@@ -350,6 +380,37 @@ function _commitAnnotation() {
   }
   _hideAnnotationInput();
   setTool('pick'); // return to normal tool
+}
+
+/* ════════════════════════════════════════════════════════
+   BAR SELECTION & CUSTOM STIRRUPS
+════════════════════════════════════════════════════════ */
+function _updateEstriboBtnState() {
+  const btn = document.getElementById('btnAddEstribo');
+  if (!btn) return;
+  btn.disabled = appState.selectedBars.length < 2;
+  btn.title = appState.selectedBars.length < 2
+    ? 'Selecciona al menos 2 barras con la herramienta Sel. barra'
+    : `Añadir estribo entre ${appState.selectedBars.length} barras seleccionadas`;
+}
+
+export function addCustomStirrup() {
+  if (appState.selectedBars.length < 2) return;
+  appState.customStirrups.push({ barIds: [...appState.selectedBars] });
+  appState.selectedBars = [];
+  _updateEstriboBtnState();
+  fullRedraw();
+}
+
+export function clearBarSelection() {
+  appState.selectedBars = [];
+  _updateEstriboBtnState();
+  fullRedraw();
+}
+
+export function delCustomStirrup(idx) {
+  appState.customStirrups.splice(idx, 1);
+  fullRedraw();
 }
 
 /* ════════════════════════════════════════════════════════

@@ -608,11 +608,37 @@ function drawBarsLayer() {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(bar.label, bar.cx, bar.cy);
     ctx.textBaseline = 'alphabetic';
+
+    // Selection ring (select-bar tool)
+    if (appState.selectedBars.includes(bar.id)) {
+      ctx.beginPath(); ctx.arc(bar.cx, bar.cy, bar.r + 5, 0, Math.PI * 2);
+      ctx.strokeStyle = '#06b6d4'; ctx.lineWidth = 2.2;
+      ctx.setLineDash([4, 2]); ctx.stroke(); ctx.setLineDash([]);
+    }
   });
 }
 
-/* ════════════════════════════════════════════════════════
-   INSPECTION OVERLAY
+/* ════════════════════════════════════════════════════════   CUSTOM STIRRUPS (user-drawn, keyed by barId)
+════════════════════════════════════════════════════ */
+function drawCustomStirrups() {
+  if (!appState.customStirrups.length) return;
+  appState.customStirrups.forEach(stirrup => {
+    const bars = stirrup.barIds
+      .map(id => appState.barPositions.find(b => b.id === id))
+      .filter(Boolean);
+    if (bars.length < 2) return;
+    const xs   = bars.map(b => b.cx), ys = bars.map(b => b.cy);
+    const rMax = Math.max(...bars.map(b => b.r));
+    const pad  = rMax + 5;
+    const x1   = Math.min(...xs) - pad, y1 = Math.min(...ys) - pad;
+    const bw   = Math.max(...xs) + pad - x1;
+    const bh2  = Math.max(...ys) + pad - y1;
+    ctx.strokeStyle = '#b45309'; ctx.lineWidth = 2.2; ctx.setLineDash([]);
+    rrect(x1, y1, bw, bh2, 4); ctx.stroke();
+  });
+}
+
+/* ════════════════════════════════════════════════════   INSPECTION OVERLAY
 ════════════════════════════════════════════════════════ */
 function drawInspectionOverlay(p, W, H) {
   const cm = p.cover_measured || 0;
@@ -755,6 +781,9 @@ export function fullRedraw() {
   // Layer 3: Bars
   drawBarsLayer();
 
+  // Layer 3b: Custom stirrups (over bars, under overlays)
+  drawCustomStirrups();
+
   // Layer 4: Inspection overlay
   drawInspectionOverlay(p, W, H);
 
@@ -809,6 +838,9 @@ export function clearCV() {
     appState.pickedZone.getContext('2d').clearRect(0, 0, appState.pickedZone.width, appState.pickedZone.height);
   }
   appState.cracks = []; appState.crackPts = null;
+  appState.annotations = [];
+  appState.customStirrups = [];
+  appState.selectedBars = [];
   fullRedraw();
 }
 
@@ -831,4 +863,14 @@ export function hitTestAnnotation(x, y) {
     if (x >= ann.x - 3 && x <= ann.x + m.width + 3 && y >= ann.y - 16 && y <= ann.y + 4) return i;
   }
   return -1;
+}
+/* ─── Bar hit test ────────────────────────────────────────── */
+export function hitTestBar(x, y) {
+  const TOL = 8; // extra px tolerance beyond bar radius
+  for (let i = appState.barPositions.length - 1; i >= 0; i--) {
+    const b = appState.barPositions[i];
+    const dx = x - b.cx, dy = y - b.cy;
+    if (Math.sqrt(dx * dx + dy * dy) <= b.r + TOL) return b.id;
+  }
+  return null;
 }

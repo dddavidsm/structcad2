@@ -225,6 +225,20 @@
           </button>
 
           <div class="cv-sep"></div>
+          <span class="cv-label">Barras</span>
+          <button class="tool" id="t-select-bar" data-tool="select-bar">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
+              <circle cx="7" cy="7" r="4.5"/>
+              <circle cx="7" cy="7" r="2" fill="currentColor" stroke="none"/>
+            </svg>Sel.
+          </button>
+          <button class="tool" id="btnAddEstribo" disabled title="Selecciona ≥ 2 barras">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
+              <rect x="2" y="3" width="10" height="8" rx="1.5"/>
+            </svg>Estribo
+          </button>
+
+          <div class="cv-sep"></div>
           <button class="tool" id="btnUndo" title="Deshacer">
             <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4">
               <path d="M2 7A5 5 0 117 2"/>
@@ -267,6 +281,7 @@
           <div class="cv-leg"><div class="cv-swatch" style="background:var(--r500);border-radius:50%"></div>No encontr.</div>
           <div class="cv-leg"><div class="cv-swatch" style="background:var(--amber);border-radius:50%"></div>Oxidada</div>
           <div class="cv-leg"><div class="cv-swatch" style="background:#155e27"></div>Estribo</div>
+          <div class="cv-leg"><div class="cv-swatch" style="border:2px solid #b45309;background:transparent;border-radius:2px"></div>Estr. manual</div>
           <div class="cv-leg"><div class="cv-swatch" style="background:#6d28d9"></div>Rama int.</div>
           <div class="cv-leg"><div class="cv-swatch" style="border:1.5px dashed var(--o500);background:transparent"></div>Rec. real</div>
           <div class="cv-leg"><div class="cv-swatch" style="background:#dc2626"></div>Fisura</div>
@@ -376,6 +391,7 @@ import {
   renderHistory, delH,
   doExportCSV,
   resetAll,
+  addCustomStirrup, clearBarSelection, delCustomStirrup,
 } from './js/main.js';
 
 /* ── Bottom nav ─────────────────────────────────── */
@@ -402,6 +418,7 @@ document.querySelectorAll('.bs-dot[data-brush]').forEach(dot => {
 });
 document.getElementById('btnUndo').addEventListener('click', undoCV);
 document.getElementById('btnClear').addEventListener('click', clearCV);
+document.getElementById('btnAddEstribo').addEventListener('click', addCustomStirrup);
 
 /* ── View toggle ────────────────────────────────── */
 document.querySelectorAll('.view-btn[data-view]').forEach(btn => {

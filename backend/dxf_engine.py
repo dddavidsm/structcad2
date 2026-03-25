@@ -43,10 +43,9 @@ def _make_doc():
     return doc, doc.modelspace()
 
 def _buf(doc) -> io.BytesIO:
-    buf = io.BytesIO()
-    doc.write(buf)
-    buf.seek(0)
-    return buf
+    s = io.StringIO()
+    doc.write(s)
+    return io.BytesIO(s.getvalue().encode("utf-8"))
 
 
 # â”€â”€â”€ PRIMITIVOS DE DIBUJO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
