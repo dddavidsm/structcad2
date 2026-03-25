@@ -2,18 +2,23 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Optional, List, Any
+from pathlib import Path
 import io
 
-from dxf_engine_v2 import (
+# Absolute path to the frontend directory (one level up from backend/)
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+
+from dxf_engine import (
     generate_dxf_pillar_rect, generate_dxf_pillar_circ,
     generate_dxf_beam, generate_dxf_footing,
     generate_dxf_forjado, generate_dxf_stair
 )
 
 app = FastAPI(title="StructCAD Pro API", version="2.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], expose_headers=["Content-Disposition"])
 
 class InspectionBase(BaseModel):
     element_id: Optional[str] = "E-01"
@@ -63,7 +68,7 @@ class BeamData(InspectionBase):
     cover: float = Field(..., gt=0)
     stirrup_diam: float = Field(..., gt=0)
     stirrup_spacing: float = Field(..., gt=0)
-    inspection_length: float = Field(..., gt=0)
+    inspection_length: Optional[float] = 25
 
 class FootingData(InspectionBase):
     length: float = Field(..., gt=0)
@@ -113,8 +118,8 @@ def _stream(buf: io.BytesIO, filename: str) -> StreamingResponse:
         headers={"Content-Disposition": f'attachment; filename="{filename}"',
                  "Access-Control-Expose-Headers": "Content-Disposition"})
 
-@app.get("/")
-def root():
+@app.get("/api/health")
+def health():
     return {"status": "ok", "version": "2.1.0"}
 
 @app.post("/generate/pillar-rect")
@@ -146,3 +151,8 @@ def gen_forjado(data: ForjadoData):
 def gen_stair(data: StairData):
     try: return _stream(generate_dxf_stair(data), f"escalera_{data.element_id}.dxf")
     except Exception as e: raise HTTPException(500, str(e))
+
+# ── Serve the frontend SPA (MUST be last — catches everything not matched above)
+# html=True means index.html is served for "/" and any unmatched path
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

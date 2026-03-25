@@ -3,31 +3,47 @@
 ## Estructura de carpetas
 
 ```
-structcad2/
+EE/
 │
 ├── backend/
-│   ├── main.py              ← API FastAPI (endpoints, modelos Pydantic)
-│   ├── dxf_engine.py        ← Motor de generación DXF (toda la geometría)
+│   ├── main.py              ← API FastAPI + sirve el frontend
+│   ├── dxf_engine.py        ← Motor de generación DXF
 │   └── requirements.txt     ← Dependencias Python
 │
 ├── frontend/
-│   └── index.html           ← Aplicación web completa (un solo archivo)
+│   ├── index.html           ← Shell HTML (sin JS inline)
+│   ├── css/
+│   │   └── styles.css       ← Estilos completos
+│   └── js/
+│       ├── state.js         ← Estado global + definiciones de estructuras
+│       ├── canvasEngine.js  ← Motor de dibujo 2D
+│       ├── api.js           ← Llamadas al backend (DXF, CSV)
+│       └── main.js          ← Controladores de UI y eventos DOM
 │
+├── start.bat                ← Arrancar el servidor (doble clic)
 └── README.md                ← Este archivo
 ```
+
+---
+
+## Arranque rápido
+
+**Doble clic en `start.bat`** y abrir en el navegador:  
+👉 **http://localhost:8000**
 
 ---
 
 ## Requisitos previos
 
 - **Python 3.9 o superior**
-  Verificar con: `python3 --version`
+  Verificar con: `python --version`
 - **pip** (viene incluido con Python)
-  Verificar con: `pip --version`
-- **Navegador moderno** (Chrome, Firefox, Edge, Safari)
 
-No se necesita Node.js, npm, ni ningún otro sistema de build.
-El frontend es un único archivo HTML estático.
+No se necesita Node.js, npm, ni ningún sistema de build.
+
+---
+
+## Instalación manual (primera vez)
 
 ---
 
