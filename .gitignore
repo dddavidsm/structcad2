@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+backend/venv/
+backend/.venv/
+*.egg-info/
+.env
+
+# Node / React
+frontend-react/node_modules/
+frontend-react/dist/
+
+# Environment
+.env.local
+.env.*.local
+*.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp

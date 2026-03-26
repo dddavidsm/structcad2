@@ -1,0 +1,54 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.logo-icon {
+  font-size: 22px;
+  color: #60a5fa;
+}
+.logo-text {
+  font-size: 17px;
+  font-weight: 800;
+  color: #f1f5f9;
+  letter-spacing: .01em;
+}
+.logo-pro {
+  color: #60a5fa;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.header-version {
+  font-size: 11px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+.btn-reset {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1.5px solid #475569;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.btn-reset:hover { color: #f1f5f9; border-color: #94a3b8; }

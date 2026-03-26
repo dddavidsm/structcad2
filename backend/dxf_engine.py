@@ -177,6 +177,41 @@ def _fill_bar(msp, cx, cy, r):
     _C(msp, cx, cy, r, "ARMADURA", lw=20)
 
 
+def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h):
+    """
+    Rellena zonas picadas UNICAMENTE donde el usuario pinto con la brocha.
+
+    circles : lista de dicts {nx, ny, nr} con coordenadas normalizadas [0,1].
+              nx/ny son el centro normalizado, nr es el radio normalizado
+              respecto a min(struct_w, struct_h).
+    px, py  : origen de la seccion en el espacio DXF (cm).
+    struct_w/h : dimensiones reales de la seccion en cm.
+
+    Nota: el eje Y del canvas es hacia abajo (top=0) y el DXF hacia arriba
+    (bottom=0), por lo que se invierte ny -> (1 - ny).
+    """
+    if not circles:
+        return
+    min_dim = min(struct_w, struct_h)
+    n_pts = 32
+    for c in circles:
+        try:
+            nx = float(c.get('nx', 0))
+            ny = float(c.get('ny', 0))
+            nr = float(c.get('nr', 0))
+            cx = px + nx * struct_w
+            cy = py + (1.0 - ny) * struct_h   # invertir eje Y canvas->DXF
+            r  = nr * min_dim
+            if r < 0.2:
+                continue
+            pts = [(cx + r * math.cos(math.radians(i * 360 / n_pts)),
+                    cy + r * math.sin(math.radians(i * 360 / n_pts)))
+                   for i in range(n_pts)]
+            _fill_picado(msp, pts)
+        except (ValueError, TypeError, KeyError):
+            continue
+
+
 # ================================================================
 #  BORDE ONDULADO
 # ================================================================
@@ -363,17 +398,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # Hormigon intacto (gris): toda la seccion
     _fill_gray(msp, _rpts(PX,PY,W,D))
 
-    # Zona picada: cuadrante inferior izquierdo con borde ondulado
-    wavy_top = _wavy_pts(PX+W*.65,PY+D*.25, PX,PY+D*.72, amp=2.5,waves=3)
-    zp_sec   = ([(PX,PY),(PX+W*.65,PY),(PX+W*.65,PY+D*.25)] +
-                wavy_top +
-                [(PX,PY+D*.72),(PX,PY)])
-    _fill_picado(msp, zp_sec)
-
-    # Borde ondulado visible
-    _wavy_line(msp,PX+W*.65,PY+D*.25, PX,PY+D*.72, amp=2.5,waves=3,
-               layer="SECCION",lw=20)
-    _L(msp,PX+W*.65,PY,PX+W*.65,PY+D*.25,"SECCION",lw=18)
+    # Zona picada: solo donde el usuario pinto con la brocha
+    circles = list(getattr(data, 'picked_circles', None) or [])
+    _fill_picado_circles(msp, circles, PX, PY, W, D)
 
     # Contorno exterior (encima de rellenos)
     _rect(msp,PX,PY,W,D,"SECCION",lw=70)
@@ -539,11 +566,10 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
            R*math.sin(math.radians(i*360/n36))) for i in range(n36)]
     _fill_gray(msp,circ)
 
-    # Picado: mitad inferior
-    half=[(0,0)]+[(R*math.cos(math.radians(180+i*180/(n36//2))),
-                   R*math.sin(math.radians(180+i*180/(n36//2))))
-                  for i in range(n36//2+1)]+[(0,0)]
-    _fill_picado(msp,half)
+    # Picado: solo donde el usuario pinto con la brocha
+    # El canvas muestra el circulo centrado: [0,1]x[0,1] = [-R..R] x [-R..R]
+    circles = list(getattr(data, 'picked_circles', None) or [])
+    _fill_picado_circles(msp, circles, -R, -R, 2*R, 2*R)
 
     _C(msp,0,0,R,"SECCION",lw=70)
     _C(msp,0,0,R-cov,"ESTRIBOS",lw=28)
@@ -609,11 +635,9 @@ def generate_dxf_beam(data) -> io.BytesIO:
 
     # SECCION TRANSVERSAL
     _fill_gray(msp,_rpts(0,0,W,H))
-    # Picado: zona derecha con borde ondulado vertical
-    wp_v=_wavy_pts(W*.4,0, W*.4,H, amp=1.5,waves=3)
-    pic_s=([(W*.4,0),(W,0),(W,H),(W*.4,H)]+wp_v)
-    _fill_picado(msp,pic_s)
-    _wavy_line(msp,W*.4,0,W*.4,H,amp=1.5,waves=3,layer="SECCION",lw=20)
+    # Picado: solo donde el usuario pinto con la brocha
+    circles = list(getattr(data, 'picked_circles', None) or [])
+    _fill_picado_circles(msp, circles, 0, 0, W, H)
 
     _rect(msp,0,0,W,H,"SECCION",lw=70)
     _stirrup(msp,cov-ds/20,cov-ds/20,W-2*(cov-ds/20),H-2*(cov-ds/20),rc=.8)
@@ -694,22 +718,15 @@ def generate_dxf_forjado(data) -> io.BytesIO:
     doc,msp=_make_doc()
 
     # ── SECCION TRANSVERSAL ──────────────────────────────────────
-    SX,SY=0.0,0.0; wi=WR*.15
+    SX,SY=0.0,0.0
 
-    # Intacto: franjas laterales
-    _fill_gray(msp,_rpts(SX,SY,wi,th))
-    _fill_gray(msp,_rpts(SX+WR-wi,SY,wi,th))
+    # Intacto: toda la seccion
+    _fill_gray(msp,_rpts(SX,SY,WR,th))
 
-    # Picado: franja central con bordes ondulados
-    wp_ts=_wavy_pts(SX+wi,SY+th,SX+WR-wi,SY+th,amp=1.8,waves=4)
-    wp_bs=_wavy_pts(SX+wi,SY,   SX+WR-wi,SY,   amp=1.8,waves=4)
-    pic_s=(wp_ts+[(SX+WR-wi,SY)]+list(reversed(wp_bs))+[(SX+wi,SY+th)])
-    _fill_picado(msp,pic_s)
+    # Picado: solo donde el usuario pinto con la brocha
+    circles = list(getattr(data, 'picked_circles', None) or [])
+    _fill_picado_circles(msp, circles, SX, SY, WR, th)
 
-    _wavy_line(msp,SX+wi,SY,   SX+WR-wi,SY,   amp=1.8,waves=4,layer="SECCION",lw=20)
-    _wavy_line(msp,SX+wi,SY+th,SX+WR-wi,SY+th,amp=1.8,waves=4,layer="SECCION",lw=20)
-    _L(msp,SX+wi,SY,SX+wi,SY+th,"SECCION",lw=18)
-    _L(msp,SX+WR-wi,SY,SX+WR-wi,SY+th,"SECCION",lw=18)
     _rect(msp,SX,SY,WR,th,"SECCION",lw=70)
 
     rx=max(.7,dx/20); ry=max(.6,dy/20)
@@ -744,14 +761,11 @@ def generate_dxf_forjado(data) -> io.BytesIO:
     # ── PLANTA ARMADURA ──────────────────────────────────────────
     PLX=0.0; PLY=-(HR+48); bw=8
 
-    # Intacto: borde
-    _fill_gray(msp,_rpts(PLX,PLY,WR,bw))
-    _fill_gray(msp,_rpts(PLX,PLY+HR-bw,WR,bw))
-    _fill_gray(msp,_rpts(PLX,PLY+bw,bw,HR-2*bw))
-    _fill_gray(msp,_rpts(PLX+WR-bw,PLY+bw,bw,HR-2*bw))
+    # Intacto: toda la planta
+    _fill_gray(msp,_rpts(PLX,PLY,WR,HR))
 
-    # Picado: interior
-    _fill_picado(msp,_rpts(PLX+bw,PLY+bw,WR-2*bw,HR-2*bw))
+    # Picado: solo donde el usuario pinto con la brocha
+    _fill_picado_circles(msp, circles, PLX, PLY, WR, HR)
     _rect(msp,PLX,PLY,WR,HR,"SECCION",lw=70)
 
     for i in range(nsx):
@@ -795,9 +809,11 @@ def generate_dxf_footing(data) -> io.BytesIO:
     doc,msp=_make_doc()
 
     # PLANTA
+    circles = list(getattr(data, 'picked_circles', None) or [])
     _fill_gray(msp,_rpts(0,0,L,WW))
     px=(L-pw)/2; py=(WW-pd)/2
-    _fill_picado(msp,_rpts(cs,cs,L-2*cs,WW-2*cs))
+    # Picado: solo donde el usuario pinto con la brocha
+    _fill_picado_circles(msp, circles, 0, 0, L, WW)
     _fill_gray(msp,_rpts(px,py,pw,pd),color=250)
 
     _rect(msp,0,0,L,WW,"SECCION",lw=70)
@@ -820,7 +836,6 @@ def generate_dxf_footing(data) -> io.BytesIO:
     # SECCION X-X
     SX=0; SY=-(H+48)
     _fill_gray(msp,_rpts(SX,SY,L,H))
-    _fill_picado(msp,_rpts(SX+L*.15,SY,L*.7,H))
     _rect(msp,SX,SY,L,H,"SECCION",lw=70)
     for i in range(min(nx,20)): _fill_bar(msp,SX+cs+i*spx,SY+cb,max(.7,dx/20))
     _dim_h(msp,SX,SX+L,SY-10,SY,f"{L:.0f}",ht=2.2)
@@ -831,7 +846,6 @@ def generate_dxf_footing(data) -> io.BytesIO:
     # SECCION Y-Y
     SYX=L+32; SYY=SY
     _fill_gray(msp,_rpts(SYX,SYY,WW,H))
-    _fill_picado(msp,_rpts(SYX+WW*.15,SYY,WW*.7,H))
     _rect(msp,SYX,SYY,WW,H,"SECCION",lw=70)
     for i in range(min(ny,20)): _fill_bar(msp,SYX+cs+i*spy,SYY+cb,max(.7,dy/20))
     _dim_h(msp,SYX,SYX+WW,SYY-10,SYY,f"{WW:.0f}",ht=2.2)
@@ -865,12 +879,11 @@ def generate_dxf_stair(data) -> io.BytesIO:
         px=ox+i*tread; py=oy-(i+1)*riser
         _fill_gray(msp,[(px,py),(px+tread,py),(px+tread,py+riser),(px,py+riser)])
 
-    # Picado: peldanos centrales
-    mi=n//2
-    for ii in range(min(2,n)):
-        ipx=ox+(mi+ii)*tread; ipy=oy-(mi+ii+1)*riser
-        _fill_picado(msp,[(ipx,ipy),(ipx+tread,ipy),
-                          (ipx+tread,ipy+riser),(ipx,ipy+riser)])
+    # Picado: solo donde el usuario pinto con la brocha
+    # Bounds del canvas de escalera: origen (ox, oy-n*riser), tamaño (n*tread) x (n*riser+th)
+    stair_h = n * riser + th
+    circles = list(getattr(data, 'picked_circles', None) or [])
+    _fill_picado_circles(msp, circles, ox, oy - n * riser, n * tread, stair_h)
 
     # Contorno
     cur_x,cur_y=ox,oy

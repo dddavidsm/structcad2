@@ -8,8 +8,10 @@ from typing import Optional, List, Any
 from pathlib import Path
 import io
 
-# Absolute path to the frontend directory (one level up from backend/)
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+# Serve the React build (dist/) preferentially; fall back to legacy frontend/
+_REACT_DIST = Path(__file__).parent.parent / "frontend-react" / "dist"
+_LEGACY_DIR = Path(__file__).parent.parent / "frontend"
+FRONTEND_DIR = _REACT_DIST if _REACT_DIST.exists() else _LEGACY_DIR
 
 from dxf_engine import (
     generate_dxf_pillar_rect, generate_dxf_pillar_circ,
@@ -34,6 +36,9 @@ class InspectionBase(BaseModel):
     anomalies: Optional[str] = None
     canvas_data: Optional[str] = None
     markers: Optional[List[Any]] = []
+    # Circulos normalizados [0,1] de las zonas pintadas con la brocha en el canvas
+    # Cada elemento: {nx: float, ny: float, nr: float}
+    picked_circles: Optional[List[Any]] = []
 
 class PillarRectData(InspectionBase):
     width: float = Field(..., gt=0)

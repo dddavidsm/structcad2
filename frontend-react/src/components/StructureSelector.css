@@ -1,0 +1,67 @@
+.selector-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  padding: 32px 16px;
+}
+
+.selector-hero {
+  text-align: center;
+}
+.selector-title {
+  font-size: 28px;
+  font-weight: 800;
+  color: #1e293b;
+  margin: 0;
+}
+.selector-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin: 4px 0 0;
+}
+
+.selector-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 600px;
+}
+
+.struct-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 12px;
+  border-radius: 10px;
+  border: 2px solid #e2e8f0;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .1s;
+  min-height: 90px;
+}
+.struct-card:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  transform: translateY(-2px);
+}
+.struct-card.selected {
+  border-color: #2563eb;
+  background: #dbeafe;
+}
+
+.struct-icon {
+  font-size: 28px;
+  line-height: 1;
+  color: #2563eb;
+}
+.struct-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  text-align: center;
+  line-height: 1.3;
+}

@@ -1,0 +1,115 @@
+.canvas-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+}
+
+.cv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.cv-tools {
+  display: flex;
+  gap: 4px;
+}
+
+.cv-tool-btn {
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s, border-color .15s;
+}
+.cv-tool-btn:hover { background: #e2e8f0; }
+.cv-tool-btn.active {
+  background: #2563eb;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+.cv-brush-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cv-label {
+  font-size: 11px;
+  color: #64748b;
+  white-space: nowrap;
+}
+.cv-brush-slider {
+  width: 80px;
+  accent-color: #ea580c;
+}
+
+.cv-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.cv-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1.5px solid #cbd5e1;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background .15s;
+}
+.cv-btn:hover { background: #e2e8f0; }
+.cv-btn.danger { border-color: #fca5a5; color: #dc2626; }
+.cv-btn.danger:hover { background: #fee2e2; }
+
+.cv-view-toggle {
+  display: flex;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cv-view-btn {
+  padding: 4px 12px;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  transition: background .15s, color .15s;
+}
+.cv-view-btn + .cv-view-btn { border-left: 1px solid #cbd5e1; }
+.cv-view-btn.active { background: #2563eb; color: #fff; }
+
+.cv-wrap {
+  flex: 1;
+  min-height: 300px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  position: relative;
+}
+.cv-wrap canvas { display: block; width: 100%; }
+
+.cv-info {
+  font-size: 10px;
+  color: #94a3b8;
+  text-align: right;
+  padding-right: 4px;
+}
+.cv-pick-count { color: #ea580c; font-weight: 600; }
