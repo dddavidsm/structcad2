@@ -18,20 +18,22 @@ from dxf_engine import (
 )
 
 app = FastAPI(title="StructCAD Pro API", version="2.1.0")
-origins = [
-    "http://localhost:3000",
-    "http://localhost:5173",
-    "https://tu-app-en-vercel.vercel.app", # <--- AÑADE TU URL DE VERCEL AQUÍ
-]
 
+# CORS: permite peticiones desde el frontend (Vercel proxy o desarrollo local).
+# Con allow_origins=["*"] NO se puede usar allow_credentials=True.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://structcad2.vercel.app",
+        "https://structcad2-backend.onrender.com",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Accept"],
+    expose_headers=["Content-Disposition"],
 )
-allow_origins=["*"], # Esto permite peticiones desde cualquier lugar
 
 class InspectionBase(BaseModel):
     element_id: Optional[str] = "E-01"
@@ -130,9 +132,12 @@ class StairData(InspectionBase):
     depth_no_rebar: Optional[float] = None
 
 def _stream(buf: io.BytesIO, filename: str) -> StreamingResponse:
-    return StreamingResponse(buf, media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"',
-                 "Access-Control-Expose-Headers": "Content-Disposition"})
+    buf.seek(0)  # garantizar posicion al inicio antes de streamear
+    return StreamingResponse(
+        buf,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 @app.get("/api/health")
 def health():

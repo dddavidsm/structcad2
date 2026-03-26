@@ -1,0 +1,18 @@
+{
+  "buildCommand": "npm --prefix frontend install && npm --prefix frontend run build",
+  "outputDirectory": "frontend/dist",
+  "rewrites": [
+    {
+      "source": "/generate/:path*",
+      "destination": "https://structcad2-backend.onrender.com/generate/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://structcad2-backend.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
