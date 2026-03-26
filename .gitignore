@@ -24,3 +24,9 @@ Thumbs.db
 .vscode/
 .idea/
 *.swp
+
+.claude
+
+.claudesingore
+
+.docs/ai/architectures/

@@ -18,7 +18,20 @@ from dxf_engine import (
 )
 
 app = FastAPI(title="StructCAD Pro API", version="2.1.0")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"], expose_headers=["Content-Disposition"])
+origins = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://tu-app-en-vercel.vercel.app", # <--- AÑADE TU URL DE VERCEL AQUÍ
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+allow_origins=["*"], # Esto permite peticiones desde cualquier lugar
 
 class InspectionBase(BaseModel):
     element_id: Optional[str] = "E-01"

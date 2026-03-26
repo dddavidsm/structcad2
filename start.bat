@@ -2,23 +2,35 @@
 title StructCAD Pro v2.2
 cd /d "%~dp0"
 echo.
-echo  =========================================
-echo   StructCAD Pro v2.2
-echo  =========================================
+echo =========================================
+echo  StructCAD Pro v2.2
+echo =========================================
 echo.
 
-REM Compilar frontend React si la carpeta dist no existe
+REM 1. Compilar frontend React si la carpeta dist no existe
 if not exist "frontend\dist\index.html" (
-  echo  Compilando interfaz React (primera vez)...
-  cd frontend
-  call npm install
-  call npm run build
-  cd ..
-  echo.
+    echo [*] Compilando interfaz React...
+    cd frontend
+    call npm install
+    call npm run build
+    cd ..
+    echo.
 )
 
-echo  Servidor disponible en:  http://localhost:8000
+REM 2. Activar entorno virtual de Python (Crucial)
+if exist "backend\venv\Scripts\activate.bat" (
+    echo [*] Activando entorno virtual de Python...
+    call "backend\venv\Scripts\activate.bat"
+) else (
+    echo [!] Aviso: No se encontro venv local. Usando Python global.
+)
+
 echo.
+echo [+] Servidor backend iniciado.
+echo [+] Abre en tu navegador: http://localhost:8000
+echo.
+
+REM 3. Iniciar el servidor
 cd backend
 uvicorn main:app --host 127.0.0.1 --port 8000
 pause
