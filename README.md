@@ -1,286 +1,185 @@
-# StructCAD Pro — Guía de Instalación Completa
+# StructCAD Pro v2.2
 
-## Estructura de carpetas
+Aplicación web de inspección estructural que genera planos técnicos en formato DXF.
+Permite documentar pilares, vigas, forjados, zapatas y escaleras marcando zonas picadas,
+estado de la armadura y fisuras directamente en el canvas.
+
+---
+
+## Estructura del proyecto
 
 ```
-EE/
-│
+structcad2/
 ├── backend/
-│   ├── main.py              ← API FastAPI + sirve el frontend
-│   ├── dxf_engine.py        ← Motor de generación DXF
-│   └── requirements.txt     ← Dependencias Python
+│   ├── main.py            ← API FastAPI (endpoints DXF + sirve el frontend)
+│   ├── dxf_engine.py      ← Motor de generación DXF (ezdxf)
+│   └── requirements.txt   ← Dependencias Python
 │
-├── frontend/
-│   ├── index.html           ← Shell HTML (sin JS inline)
-│   ├── css/
-│   │   └── styles.css       ← Estilos completos
-│   └── js/
-│       ├── state.js         ← Estado global + definiciones de estructuras
-│       ├── canvasEngine.js  ← Motor de dibujo 2D
-│       ├── api.js           ← Llamadas al backend (DXF, CSV)
-│       └── main.js          ← Controladores de UI y eventos DOM
+├── frontend-react/        ← SPA en React 18 + Vite
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── context/       ← Estado global (useReducer)
+│   │   ├── components/    ← Canvas, Forms, History, Layout
+│   │   ├── config/        ← Definición de estructuras
+│   │   └── lib/           ← Cliente Supabase + exportDXF
+│   ├── .env.example       ← Variables de entorno de ejemplo
+│   ├── package.json
+│   └── vite.config.js
 │
-├── start.bat                ← Arrancar el servidor (doble clic)
-└── README.md                ← Este archivo
+├── supabase_schema.sql    ← Schema SQL para crear la tabla en Supabase
+├── start.bat              ← Arranque rápido en Windows
+└── README.md
 ```
 
 ---
 
-## Arranque rápido
+## Arranque rápido (Windows)
 
-**Doble clic en `start.bat`** y abrir en el navegador:  
-👉 **http://localhost:8000**
+**Doble clic en `start.bat`** — compila el frontend React si hace falta y arranca el servidor:
 
----
-
-## Requisitos previos
-
-- **Python 3.9 o superior**
-  Verificar con: `python --version`
-- **pip** (viene incluido con Python)
-
-No se necesita Node.js, npm, ni ningún sistema de build.
-
----
-
-## Instalación manual (primera vez)
-
----
-
-## Instalación paso a paso
-
-### 1. Descargar / clonar el proyecto
-
-Si tienes Git:
-```bash
-git clone <url-del-repo> structcad2
-cd structcad2
+```
+http://localhost:8000
 ```
 
-Si lo tienes como ZIP:
+---
+
+## Instalación manual
+
+### Requisitos
+
+| Herramienta | Versión mínima | Para qué |
+|-------------|----------------|----------|
+| Python      | 3.9+           | Backend API + generación DXF |
+| Node.js     | 18+            | Compilar el frontend React |
+| npm         | 9+             | Gestión de paquetes JS |
+
+---
+
+### 1. Clonar el repositorio
+
 ```bash
-# Descomprimir y entrar en la carpeta
-unzip structcad2.zip
+git clone https://github.com/dddavidsm/structcad2.git
 cd structcad2
 ```
 
 ---
 
-### 2. Crear entorno virtual Python (recomendado)
+### 2. Backend Python
 
-**En macOS / Linux:**
 ```bash
 cd backend
-python3 -m venv venv
-source venv/bin/activate
-```
 
-**En Windows (CMD):**
-```cmd
-cd backend
+# Crear y activar entorno virtual
 python -m venv venv
+
+# Windows
 venv\Scripts\activate.bat
-```
 
-**En Windows (PowerShell):**
-```powershell
-cd backend
-python -m venv venv
-venv\Scripts\Activate.ps1
-```
+# macOS / Linux
+source venv/bin/activate
 
-Sabrás que el entorno está activo porque el prompt mostrará `(venv)` al inicio.
-
----
-
-### 3. Instalar dependencias
-
-Con el entorno virtual activo y estando en la carpeta `backend/`:
-```bash
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-El archivo `requirements.txt` contiene:
-```
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-pydantic==2.7.1
-python-multipart==0.0.9
-```
+---
 
-Verificar que se instaló correctamente:
+### 3. Frontend React
+
 ```bash
-pip list | grep -E "fastapi|uvicorn|pydantic"
+cd frontend-react
+npm install
+npm run build        # genera frontend-react/dist/
 ```
+
+El backend sirve automáticamente la carpeta `dist/` generada.
 
 ---
 
-### 4. Iniciar el backend
+### 4. Iniciar el servidor
 
-Desde la carpeta `backend/` con el entorno virtual activo:
 ```bash
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+cd backend
+uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
-Deberías ver algo así:
-```
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process
-INFO:     Started server process
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-```
-
-El flag `--reload` hace que el servidor se reinicie automáticamente
-cuando modificas el código. Quitarlo en producción.
+Abrir en el navegador: **http://localhost:8000**
 
 ---
 
-### 5. Abrir el frontend
+## Desarrollo frontend (modo hot-reload)
 
-**Opción A — Abrir directamente en el navegador (más simple):**
+Mientras el backend corre en `:8000`, abre una segunda terminal:
 
-En macOS:
 ```bash
-open frontend/index.html
+cd frontend-react
+npm run dev          # → http://localhost:5173
 ```
 
-En Linux:
-```bash
-xdg-open frontend/index.html
-```
-
-En Windows (desde el Explorador):
-Doble clic en `frontend/index.html`
-
-O arrastra el archivo al navegador.
+El archivo `vite.config.js` ya tiene el proxy configurado para redirigir
+las llamadas `/generate/*` y `/api/*` al backend en `:8000`.
 
 ---
 
-**Opción B — Servir con Python (recomendado para evitar problemas CORS):**
+## Configurar Supabase (historial de inspecciones)
 
-Abre una segunda terminal (sin cerrar el backend), ve a la carpeta del proyecto:
-```bash
-cd frontend
-python3 -m http.server 3000
-```
+Supabase guarda el historial de inspecciones en la nube.
+Sin Supabase la app funciona igualmente, pero el historial no persiste.
 
-Luego abre en el navegador:
-```
-http://localhost:3000
-```
+### Pasos
 
----
-
-### 6. Verificar que todo funciona
-
-1. Abre el frontend en el navegador
-2. Ve a **Configuración** (menú lateral)
-3. La URL de la API debe ser `http://localhost:8000`
-4. Pulsa **"Verificar conexión"**
-5. Debe aparecer un punto verde con el texto **"Conectado — backend activo"**
-
-Si hay error, revisa que el backend esté corriendo (paso 4).
+1. Crear un proyecto en [supabase.com](https://supabase.com)
+2. Ir a **SQL Editor → New Query**, pegar y ejecutar el contenido de `supabase_schema.sql`
+3. Copiar el archivo de entorno:
+   ```bash
+   cp frontend-react/.env.example frontend-react/.env.local
+   ```
+4. Rellenar las variables en `.env.local`:
+   ```
+   VITE_SUPABASE_URL=https://xxxxxxxxxxxxxxxxxxxx.supabase.co
+   VITE_SUPABASE_ANON_KEY=eyJhbGci...
+   ```
+5. Reconstruir el frontend:
+   ```bash
+   cd frontend-react && npm run build
+   ```
 
 ---
 
-## Uso básico
+## Endpoints API
 
-1. Ir a **Nueva Inspección**
-2. Seleccionar el tipo de estructura (pilar, viga, forjado, zapata o escalera)
-3. Rellenar las pestañas: **Geometría → Armadura → Inspección → Obra**
-4. En el canvas derecho, **pintar la zona picada** con el pincel naranja
-5. **Marcar las barras encontradas** con la herramienta "Marcar Barra"
-6. Pulsar **"Generar DXF"** → se descarga el archivo `.dxf`
-
----
-
-## Endpoints disponibles
-
-Una vez el backend está activo, puedes consultar la documentación
-interactiva en:
-
-```
-http://localhost:8000/docs
-```
-
-| Método | Ruta                    | Estructura          |
+| Método | Ruta                    | Descripción         |
 |--------|-------------------------|---------------------|
-| GET    | /                       | Health check        |
-| POST   | /generate/pillar-rect   | Pilar rectangular   |
-| POST   | /generate/pillar-circ   | Pilar circular      |
-| POST   | /generate/beam          | Viga                |
-| POST   | /generate/footing       | Zapata aislada      |
-| POST   | /generate/forjado       | Forjado / Losa      |
-| POST   | /generate/stair         | Escalera / Zanca    |
+| GET    | `/api/health`           | Estado del servidor |
+| POST   | `/generate/pillar-rect` | Pilar rectangular   |
+| POST   | `/generate/pillar-circ` | Pilar circular      |
+| POST   | `/generate/beam`        | Viga                |
+| POST   | `/generate/footing`     | Zapata aislada      |
+| POST   | `/generate/forjado`     | Forjado / Losa      |
+| POST   | `/generate/stair`       | Escalera / Zanca    |
+
+Documentación interactiva (Swagger): **http://localhost:8000/docs**
 
 ---
 
-## Solución de problemas frecuentes
+## Flujo de uso
 
-### "No module named 'fastapi'"
-El entorno virtual no está activo. Ejecutar:
-```bash
-# macOS/Linux
-source backend/venv/bin/activate
-
-# Windows CMD
-backend\venv\Scripts\activate.bat
-```
-
-### "Address already in use" (puerto 8000 ocupado)
-Cambiar el puerto:
-```bash
-uvicorn main:app --reload --port 8001
-```
-Y actualizar la URL en la app: `http://localhost:8001`
-
-### El frontend dice "No disponible" aunque el backend corre
-Puede ser un problema de CORS si abres el HTML como `file://`.
-Usa la Opción B (servir con `python3 -m http.server 3000`).
-
-### El DXF no se abre en AutoCAD
-El formato generado es DXF R12, compatible con AutoCAD 2000 y superior.
-Si tienes problemas, prueba abrirlo con **LibreCAD** (gratuito) primero
-para verificar que el archivo es correcto.
+1. Seleccionar tipo de estructura (Pilar Rect., Pilar Circ., Viga, Forjado, Zapata, Escalera)
+2. Rellenar las pestañas: **Geometría → Armadura → Inspección → Obra**
+3. En el canvas, **pintar con la brocha naranja** las zonas picadas/inspeccionadas
+4. Marcar el estado de cada barra (encontrada / no encontrada / oxidada) haciendo clic
+5. Añadir fisuras o anotaciones de texto si es necesario
+6. Pulsar **Generar DXF** — se descarga el plano `.dxf`
+   - La zona blanca con trama en el DXF corresponde exactamente a lo pintado con la brocha
 
 ---
 
-## Comandos de referencia rápida
+## Solución de problemas
 
-```bash
-# Activar entorno (cada vez que abras una terminal nueva)
-source backend/venv/bin/activate          # macOS/Linux
-backend\venv\Scripts\activate.bat         # Windows
-
-# Iniciar backend
-cd backend && uvicorn main:app --reload
-
-# Iniciar frontend (segunda terminal)
-cd frontend && python3 -m http.server 3000
-
-# Desactivar entorno cuando termines
-deactivate
-```
-
----
-
-## Estructura de los archivos en detalle
-
-### `backend/main.py`
-Define la API con FastAPI. Contiene los modelos de datos (Pydantic)
-para cada tipo de estructura y los endpoints que reciben el formulario
-y devuelven el archivo DXF como descarga binaria.
-
-### `backend/dxf_engine.py`
-El motor de generación. Contiene:
-- Funciones primitivas: `_line`, `_circle`, `_rect`, `_text`, `_dim_horizontal`, etc.
-- Una función generadora por cada tipo de estructura
-- Sistema de capas: SECCION, ZONA_PICADA, ARMADURA_LONG, ESTRIBOS, COTAS, TEXTO, CAJETIN
-
-### `frontend/index.html`
-Aplicación web completa en un único archivo. Incluye:
-- HTML estructural con sidebar + topbar + páginas
-- CSS corporativo con variables
-- JavaScript con toda la lógica (canvas editor, formularios adaptativos,
-  llamadas a la API, historial local)
+| Síntoma | Causa probable | Solución |
+|---------|---------------|----------|
+| `No module named 'fastapi'` | Entorno virtual no activo | `venv\Scripts\activate.bat` |
+| Puerto 8000 ocupado | Otro proceso | `uvicorn main:app --port 8001` |
+| Canvas en blanco | Estructura no seleccionada | Seleccionar estructura primero |
+| DXF no abre en AutoCAD | Formato R2000 | Abrir con LibreCAD para verificar |
+| Historial vacío | Supabase no configurado | Ver sección "Configurar Supabase" |

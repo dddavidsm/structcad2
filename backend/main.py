@@ -8,10 +8,8 @@ from typing import Optional, List, Any
 from pathlib import Path
 import io
 
-# Serve the React build (dist/) preferentially; fall back to legacy frontend/
-_REACT_DIST = Path(__file__).parent.parent / "frontend-react" / "dist"
-_LEGACY_DIR = Path(__file__).parent.parent / "frontend"
-FRONTEND_DIR = _REACT_DIST if _REACT_DIST.exists() else _LEGACY_DIR
+# Sirve la build React (npm run build) desde frontend-react/dist/
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
 
 from dxf_engine import (
     generate_dxf_pillar_rect, generate_dxf_pillar_circ,
