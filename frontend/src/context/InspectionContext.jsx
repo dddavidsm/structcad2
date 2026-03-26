@@ -7,19 +7,19 @@ const INITIAL = {
   page:       'nueva',     // 'nueva' | 'historial'
   step:       1,           // 1: selector estructura, 2: workspace
   struct:     null,
-  view:       'section',   // 'section' | 'elevation'
+  view:       'section',   // 'section' | 'elevation' | 'lateral' | 'frontal'
   tool:       'pick',      // 'pick' | 'erase' | 'crack' | 'annotate' | 'select-bar'
   brush:      10,
   activeTab:  'geometria',
 
-  // Datos de inspeccion (reset al cambiar estructura)
+  // Datos live de la vista activa
   barStatus:      {},   // {barId: 'unknown'|'found'|'notfound'|'oxidized'}
-  cracks:         [],   // [{x1,y1,x2,y2}]
-  annotations:    [],   // [{x,y,text}]
-  customStirrups: [],   // [{barIds:[...]}]
+  cracks:         [],
+  annotations:    [],
+  customStirrups: [],
   selectedBars:   [],
-  pickedStrokes:  [],   // [{cx,cy,r}] en px del canvas — zona pintada
-  sectionBounds:  null, // {ox,oy,sw,sh} — bounds de la seccion en canvas
+  pickedStrokes:  [],   // [{cx,cy,r}]
+  sectionBounds:  null, // {ox,oy,sw,sh}
 
   // Cache de barras (reconstruido en cada redraw)
   barPositions: [],
@@ -27,15 +27,38 @@ const INITIAL = {
   // Valores de formulario persistentes por estructura
   formValues:  {},
 
-  // Snapshots por estructura (al cambiar a otra)
+  // Datos por vista: { [view]: { pickedStrokes, cracks, annotations, customStirrups } }
+  viewData: {},
+
+  // Snapshots por estructura
   structStates: {},
 
-  // Historial (desde Supabase o localStorage)
+  // Historial
   history: [],
 
   // Estado del boton DXF
-  dxfStatus: null,  // null | {type:'spin'|'ok'|'err', msg:string}
+  dxfStatus: null,
 };
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+function _cloneView(state) {
+  return {
+    pickedStrokes:  state.pickedStrokes.map(s => ({ ...s })),
+    cracks:         state.cracks.map(c => ({ ...c })),
+    annotations:    state.annotations.map(a => ({ ...a })),
+    customStirrups: state.customStirrups.map(s => ({ barIds: [...s.barIds] })),
+  };
+}
+
+function _restoreView(vd) {
+  return {
+    pickedStrokes:  (vd?.pickedStrokes  || []).map(s => ({ ...s })),
+    cracks:         (vd?.cracks         || []).map(c => ({ ...c })),
+    annotations:    (vd?.annotations    || []).map(a => ({ ...a })),
+    customStirrups: (vd?.customStirrups || []).map(s => ({ barIds: [...s.barIds] })),
+  };
+}
 
 // ── Reducer ───────────────────────────────────────────────────────
 
@@ -52,24 +75,26 @@ function reducer(state, action) {
       const prev = state.struct;
       const next = action.payload;
 
-      // Guardar snapshot del estado actual si hay estructura previa
+      // Flush live data para la vista activa
+      const currentViewData = {
+        ...state.viewData,
+        [state.view]: _cloneView(state),
+      };
+
+      // Guardar snapshot del struct actual
       let structStates = state.structStates;
       if (prev && prev !== next) {
         structStates = {
           ...structStates,
           [prev]: {
-            barStatus:      { ...state.barStatus },
-            cracks:         state.cracks.map(c => ({ ...c })),
-            annotations:    state.annotations.map(a => ({ ...a })),
-            customStirrups: state.customStirrups.map(s => ({ barIds: [...s.barIds] })),
-            formValues:     { ...state.formValues },
-            selectedBars:   [],
-            pickedStrokes:  state.pickedStrokes.map(s => ({ ...s })),
+            barStatus:  { ...state.barStatus },
+            formValues: { ...state.formValues },
+            viewData:   currentViewData,
           }
         };
       }
 
-      // Restaurar snapshot si existe, o resetear
+      // Restaurar snapshot del struct siguiente
       const saved = structStates[next];
       const defaultValues = {};
       if (STRUCTS[next]) {
@@ -82,27 +107,49 @@ function reducer(state, action) {
         }
       }
 
+      const savedViewData = saved?.viewData || {};
+      const sectionData = savedViewData['section'] || {};
+
       return {
         ...state,
-        struct:         next,
-        view:           'section',
-        activeTab:      'geometria',
+        struct:       next,
+        view:         'section',
+        activeTab:    'geometria',
         structStates,
-        barStatus:      saved ? { ...saved.barStatus }      : {},
-        cracks:         saved ? saved.cracks.map(c=>({...c})) : [],
-        annotations:    saved ? saved.annotations.map(a=>({...a})) : [],
-        customStirrups: saved ? saved.customStirrups.map(s=>({barIds:[...s.barIds]})) : [],
-        formValues:     saved ? { ...saved.formValues }     : defaultValues,
-        selectedBars:   [],
-        pickedStrokes:  saved ? saved.pickedStrokes.map(s=>({...s})) : [],
-        sectionBounds:  null,
-        barPositions:   [],
-        step:           2,
+        viewData:     savedViewData,
+        barStatus:    saved ? { ...saved.barStatus } : {},
+        formValues:   saved ? { ...saved.formValues } : defaultValues,
+        ..._restoreView(sectionData),
+        selectedBars:  [],
+        sectionBounds: null,
+        barPositions:  [],
+        step:          2,
       };
     }
 
-    case 'SET_VIEW':
-      return { ...state, view: action.payload };
+    case 'SET_VIEW': {
+      const prevView = state.view;
+      const nextView = action.payload;
+      if (prevView === nextView) return state;
+
+      // Flush live data a la vista anterior
+      const viewData = {
+        ...state.viewData,
+        [prevView]: _cloneView(state),
+      };
+
+      // Restaurar datos de la nueva vista
+      const nv = viewData[nextView] || {};
+      return {
+        ...state,
+        view:    nextView,
+        viewData,
+        ..._restoreView(nv),
+        selectedBars:  [],
+        sectionBounds: null,
+        barPositions:  [],
+      };
+    }
 
     case 'SET_TOOL':
       return { ...state, tool: action.payload };
@@ -163,11 +210,11 @@ function reducer(state, action) {
     case 'CLEAR_CANVAS':
       return {
         ...state,
-        pickedStrokes: [],
-        cracks:        [],
-        annotations:   [],
-        customStirrups:[],
-        selectedBars:  [],
+        pickedStrokes:  [],
+        cracks:         [],
+        annotations:    [],
+        customStirrups: [],
+        selectedBars:   [],
       };
 
     case 'ADD_HISTORY':
@@ -197,7 +244,6 @@ const InspectionCtx = createContext(null);
 export function InspectionProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, INITIAL);
 
-  // Helpers tipados
   const setFormValue = useCallback((id, value) =>
     dispatch({ type: 'SET_FORM_VALUE', id, value }), []);
 

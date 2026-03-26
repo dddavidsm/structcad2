@@ -8,7 +8,7 @@
 .cv-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   padding: 6px 8px;
   background: #f1f5f9;
@@ -16,23 +16,27 @@
   border: 1px solid #e2e8f0;
 }
 
+/* ── Herramientas con icono + label ── */
 .cv-tools {
   display: flex;
   gap: 4px;
 }
 
 .cv-tool-btn {
-  width: 32px;
-  height: 32px;
+  min-width: 54px;
+  height: 40px;
+  padding: 0 6px;
   border: 1.5px solid #cbd5e1;
   border-radius: 6px;
   background: #fff;
   cursor: pointer;
-  font-size: 14px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
   transition: background .15s, border-color .15s;
+  white-space: nowrap;
 }
 .cv-tool-btn:hover { background: #e2e8f0; }
 .cv-tool-btn.active {
@@ -40,7 +44,21 @@
   border-color: #1d4ed8;
   color: #fff;
 }
+.cv-tool-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+.cv-tool-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: #475569;
+  line-height: 1;
+}
+.cv-tool-btn.active .cv-tool-label {
+  color: rgba(255,255,255,.85);
+}
 
+/* ── Brocha ── */
 .cv-brush-row {
   display: flex;
   align-items: center;
@@ -56,6 +74,15 @@
   accent-color: #ea580c;
 }
 
+/* ── Estribo row ── */
+.cv-stirrup-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* ── Acciones ── */
 .cv-actions {
   display: flex;
   gap: 4px;
@@ -68,14 +95,22 @@
   border: 1.5px solid #cbd5e1;
   background: #fff;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   transition: background .15s;
+  white-space: nowrap;
 }
 .cv-btn:hover { background: #e2e8f0; }
 .cv-btn.danger { border-color: #fca5a5; color: #dc2626; }
 .cv-btn.danger:hover { background: #fee2e2; }
+.cv-btn-add-stirrup {
+  background: #b45309;
+  border-color: #92400e;
+  color: #fff;
+}
+.cv-btn-add-stirrup:hover { background: #92400e; }
 
+/* ── Vista toggle ── */
 .cv-view-toggle {
   display: flex;
   border: 1.5px solid #cbd5e1;
@@ -83,18 +118,20 @@
   overflow: hidden;
 }
 .cv-view-btn {
-  padding: 4px 12px;
+  padding: 5px 10px;
   border: none;
   background: #fff;
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
   color: #64748b;
   transition: background .15s, color .15s;
+  white-space: nowrap;
 }
 .cv-view-btn + .cv-view-btn { border-left: 1px solid #cbd5e1; }
 .cv-view-btn.active { background: #2563eb; color: #fff; }
 
+/* ── Canvas wrap ── */
 .cv-wrap {
   flex: 1;
   min-height: 300px;
@@ -106,6 +143,38 @@
 }
 .cv-wrap canvas { display: block; width: 100%; }
 
+/* ── Annotation inline input ── */
+.ann-input-wrap {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  pointer-events: auto;
+}
+.ann-input {
+  min-width: 140px;
+  max-width: 280px;
+  padding: 4px 8px;
+  border: 2px solid #1e40af;
+  border-radius: 4px;
+  background: rgba(255,255,255,.97);
+  color: #1e293b;
+  font-size: 13px;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-weight: 600;
+  outline: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+.ann-input-hint {
+  font-size: 9px;
+  color: #64748b;
+  padding-left: 2px;
+  background: rgba(255,255,255,.8);
+  border-radius: 2px;
+}
+
+/* ── Info bar ── */
 .cv-info {
   font-size: 10px;
   color: #94a3b8;

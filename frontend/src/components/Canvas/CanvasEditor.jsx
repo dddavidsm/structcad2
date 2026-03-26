@@ -1,7 +1,6 @@
 /**
  * CanvasEditor.jsx
  * Motor de renderizado 2D para StructCAD Pro (React).
- * Misma logica que canvasEngine.js original, adaptada a React con hooks.
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useInspection } from '../../context/InspectionContext.jsx';
@@ -35,22 +34,23 @@ function makeDraw(ctx) {
     ctx.restore();
   }
 
+  // Offset aumentado para evitar solapamiento con la estructura
   function dimH(x1, x2, y, lbl) {
     ctx.strokeStyle='#868e96'; ctx.lineWidth=.7; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(x1,y); ctx.lineTo(x2,y); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x1,y-3); ctx.lineTo(x1,y+3); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x2,y-3); ctx.lineTo(x2,y+3); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1,y-4); ctx.lineTo(x1,y+4); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x2,y-4); ctx.lineTo(x2,y+4); ctx.stroke();
     ctx.fillStyle='#495057'; ctx.font=`600 9px ${FONT}`; ctx.textAlign='center';
-    ctx.fillText(lbl,(x1+x2)/2,y-5);
+    ctx.fillText(lbl,(x1+x2)/2,y-6);
   }
 
   function dimV(y1, y2, x, lbl) {
     ctx.strokeStyle='#868e96'; ctx.lineWidth=.7; ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(x,y1); ctx.lineTo(x,y2); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x-3,y1); ctx.lineTo(x+3,y1); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(x-3,y2); ctx.lineTo(x+3,y2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-4,y1); ctx.lineTo(x+4,y1); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-4,y2); ctx.lineTo(x+4,y2); ctx.stroke();
     ctx.fillStyle='#495057'; ctx.font=`600 9px ${FONT}`;
-    ctx.save(); ctx.translate(x+5,(y1+y2)/2); ctx.rotate(Math.PI/2);
+    ctx.save(); ctx.translate(x+6,(y1+y2)/2); ctx.rotate(Math.PI/2);
     ctx.textAlign='center'; ctx.fillText(lbl,0,0); ctx.restore();
   }
 
@@ -81,7 +81,7 @@ function makeDraw(ctx) {
   return { fillConcrete, dimH, dimV, rrect, drawInnerBranch };
 }
 
-// ── Dibujo de estructura: Pilar Rectangular ───────────────────────
+// ── Pilar Rectangular — Planta ────────────────────────────────────
 function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const { fillConcrete, dimH, dimV, rrect, drawInnerBranch } = makeDraw(ctx);
   const w=clamp(p.width||88,15,300), d=clamp(p.depth||68,15,300);
@@ -110,10 +110,11 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const ex=ox+cf*sc, ey=oy+cl*sc, ew=w*sc-2*cf*sc, eh=d*sc-2*cl*sc;
   rrect(ex,ey,ew,eh,2); ctx.stroke();
 
-  dimH(ox,ox+w*sc,oy-8,`${w} cm`);
-  dimV(oy,oy+d*sc,ox+w*sc+8,`${d} cm`);
+  // Cotas con más separación
+  dimH(ox,ox+w*sc,oy-22,`${w} cm`);
+  dimV(oy,oy+d*sc,ox+w*sc+22,`${d} cm`);
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText(`r=${cf}`,ox+cf*sc/2,oy-1);
+  ctx.fillText(`r=${cf}cm`,ox+cf*sc/2,oy-8);
 
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   const bpFT=[], bpFB=[];
@@ -190,7 +191,7 @@ function drawPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.setLineDash([4,3]);
   ctx.beginPath(); ctx.arc(cx2,cy2,(R-cov)*sc,0,Math.PI*2); ctx.stroke();
   ctx.setLineDash([]);
-  dimH(cx2-R*sc,cx2+R*sc,cy2+R*sc+10,`Ø${diam} cm`);
+  dimH(cx2-R*sc,cx2+R*sc,cy2+R*sc+18,`Ø${diam} cm`);
 
   const brs=[];
   for (let i=0;i<nb;i++) {
@@ -243,8 +244,8 @@ function drawViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const lw=Math.max(1.2,ds/16*sc*.3);
   ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
   rrect(ox+cov*sc,oy+cov*sc,w*sc-2*cov*sc,h*sc-2*cov*sc,2); ctx.stroke();
-  dimH(ox,ox+w*sc,oy-8,`${w} cm`);
-  dimV(oy,oy+h*sc,ox+w*sc+8,`${h} cm`);
+  dimH(ox,ox+w*sc,oy-22,`${w} cm`);
+  dimV(oy,oy+h*sc,ox+w*sc+22,`${h} cm`);
 
   const spb=nbb>1?(w-2*cov)/(nbb-1):0;
   const spt=nbt>1?(w-2*cov)/(nbt-1):0;
@@ -274,7 +275,6 @@ function drawForjado(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const { fillConcrete, dimH, dimV } = makeDraw(ctx);
   const th=clamp(p.thickness||25,10,60);
   const spx=clamp(p.bars_x_spacing||15,5,30);
-  const spy=clamp(p.bars_y_spacing||15,5,30);
   const cb=clamp(p.cover_bottom||3,2,10);
   const ct=clamp(p.cover_top||3,2,10);
   const dx=clamp(p.bars_x_diam||12,6,32);
@@ -293,8 +293,8 @@ function drawForjado(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='left';
   ctx.fillText(`r.inf=${cb}cm`,ox+4,oy+th*sc-4);
   ctx.fillText(`r.sup=${ct}cm`,ox+4,oy+12);
-  dimH(ox,ox+secW,oy-8,`${(secW/sc).toFixed(0)} cm`);
-  dimV(oy,oy+th*sc,ox+secW+8,`e=${th} cm`);
+  dimH(ox,ox+secW,oy-20,`${(secW/sc).toFixed(0)} cm`);
+  dimV(oy,oy+th*sc,ox+secW+20,`e=${th} cm`);
 
   const nBars=Math.floor(secW/(spx*sc))+1;
   for(let i=0;i<nBars;i++){
@@ -326,8 +326,8 @@ function drawZapata(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.strokeRect(pox,poy,pw*sc,pd*sc);
   ctx.fillStyle='#495057'; ctx.font=`500 7px ${MONO}`; ctx.textAlign='center';
   ctx.fillText(`P ${pw}x${pd}`,pox+pw*sc/2,poy+pd*sc/2);
-  dimH(ox,ox+L*sc,oy-8,`${L} cm`);
-  dimV(oy,oy+WW*sc,ox+L*sc+8,`${WW} cm`);
+  dimH(ox,ox+L*sc,oy-20,`${L} cm`);
+  dimV(oy,oy+WW*sc,ox+L*sc+20,`${WW} cm`);
 
   const nx=clamp(p.bars_x_count||8,2,20), ny=clamp(p.bars_y_count||7,2,20);
   const spx=nx>1?(L-2*cs)/(nx-1):0, spy=ny>1?(WW-2*cs)/(ny-1):0;
@@ -361,11 +361,11 @@ function drawEscalera(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     ctx.strokeRect(px,py,tread*sc,riser*sc);
     barPositionsOut.push({id:`ES${i+1}`,label:`ES${i+1}`,cx:px+tread*sc*.5,cy:py+riser*sc*.5,r:barR(db,sc)*.7,diam:db,type:'long'});
   }
-  dimH(ox,ox+tread*sc,oy+8,`${tread} cm`);
-  dimV(oy-riser*sc,oy,ox-10,`${riser} cm`);
+  dimH(ox,ox+tread*sc,oy+10,`${tread} cm`);
+  dimV(oy-riser*sc,oy,ox-18,`${riser} cm`);
 }
 
-// ── Elevation views ───────────────────────────────────────────────
+// ── Pilar Rect — Vista Alzado (Sección) ───────────────────────────
 function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const { fillConcrete, dimH, dimV } = makeDraw(ctx);
   const w=clamp(p.width||88,15,300), d=clamp(p.depth||68,15,300);
@@ -392,8 +392,8 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
   ctx.beginPath(); ctx.moveTo(ox,oy+marg*sc); ctx.lineTo(ox+w*sc,oy+marg*sc); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(ox,oy+(VH-marg)*sc); ctx.lineTo(ox+w*sc,oy+(VH-marg)*sc); ctx.stroke();
   ctx.setLineDash([]);
-  dimH(ox,ox+w*sc,oy-8,`${w} cm`);
-  dimV(oy+marg*sc,oy+(VH-marg)*sc,ox+w*sc+8,`${ih} cm`);
+  dimH(ox,ox+w*sc,oy-20,`${w} cm`);
+  dimV(oy+marg*sc,oy+(VH-marg)*sc,ox+w*sc+22,`${ih} cm`);
 
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   for(let i=0;i<nbf;i++){
@@ -402,6 +402,108 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
     ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1,ds/16*sc*.3); ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
+}
+
+// ── Pilar Rect — Vista Lateral ────────────────────────────────────
+function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
+  const { fillConcrete, dimH, dimV } = makeDraw(ctx);
+  const d=clamp(p.depth||68,15,300);
+  const cl=clamp(p.cover_lateral||6,1,12);
+  const nbl=Math.max(0,p.bars_lateral_count||0);
+  const dl=clamp(p.bars_lateral_diam||20,6,40);
+  const ds=clamp(p.stirrup_diam||6,4,20);
+  const ih=clamp(p.inspection_height||25,5,150);
+  const VH=ih+70, marg=30;
+  const M=40;
+  const sc=Math.min((W-M*2)/d,(H-M*2)/VH);
+  const ox=(W-d*sc)/2, oy=(H-VH*sc)/2;
+
+  sectionBoundsOut.ox=ox; sectionBoundsOut.oy=oy;
+  sectionBoundsOut.sw=d*sc; sectionBoundsOut.sh=VH*sc;
+
+  fillConcrete(ox,oy,d*sc,marg*sc);
+  fillConcrete(ox,oy+(VH-marg)*sc,d*sc,marg*sc);
+  ctx.fillStyle='rgba(200,200,200,.3)';
+  ctx.fillRect(ox,oy+marg*sc,d*sc,(VH-2*marg)*sc);
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.strokeRect(ox,oy,d*sc,VH*sc);
+  ctx.strokeStyle='#ea580c'; ctx.lineWidth=1.2; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(ox,oy+marg*sc); ctx.lineTo(ox+d*sc,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,oy+(VH-marg)*sc); ctx.lineTo(ox+d*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const lw=Math.max(1,ds/16*sc*.3);
+  ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
+  if (nbl>0) {
+    const spl=nbl>1?(d-2*cl)/(nbl-1):0;
+    for(let i=0;i<nbl;i++){
+      const bx=ox+(cl+i*spl)*sc;
+      ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
+      barPositionsOut.push({id:`LV${i+1}`,label:`L${i+1}`,cx:bx,cy:oy+VH*sc*.5,r:barR(dl,sc)*.7,diam:dl,type:'lateral-elev'});
+    }
+  }
+  // Estribos
+  ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
+  ctx.beginPath(); ctx.moveTo(ox+cl*sc,oy+marg*sc); ctx.lineTo(ox+(d-cl)*sc,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox+cl*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(d-cl)*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.setLineDash([]);
+
+  dimH(ox,ox+d*sc,oy-20,`${d} cm`);
+  dimV(oy+marg*sc,oy+(VH-marg)*sc,ox+d*sc+22,`${ih} cm`);
+  dimV(oy,oy+VH*sc,ox+d*sc+36,`${VH} cm`);
+
+  ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText('Vista Lateral',ox+d*sc/2,oy+VH*sc+14);
+}
+
+// ── Pilar Rect — Vista Frontal ────────────────────────────────────
+function drawFrontalPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
+  const { fillConcrete, dimH, dimV } = makeDraw(ctx);
+  const w=clamp(p.width||88,15,300);
+  const cf=clamp(p.cover_front||5,1,12);
+  const nbf=clamp(p.bars_front_count||5,2,16);
+  const df=clamp(p.bars_front_diam||20,6,40);
+  const ds=clamp(p.stirrup_diam||6,4,20);
+  const ih=clamp(p.inspection_height||25,5,150);
+  const VH=ih+70, marg=30;
+  const M=40;
+  const sc=Math.min((W-M*2)/w,(H-M*2)/VH);
+  const ox=(W-w*sc)/2, oy=(H-VH*sc)/2;
+
+  sectionBoundsOut.ox=ox; sectionBoundsOut.oy=oy;
+  sectionBoundsOut.sw=w*sc; sectionBoundsOut.sh=VH*sc;
+
+  fillConcrete(ox,oy,w*sc,marg*sc);
+  fillConcrete(ox,oy+(VH-marg)*sc,w*sc,marg*sc);
+  ctx.fillStyle='rgba(200,200,200,.3)';
+  ctx.fillRect(ox,oy+marg*sc,w*sc,(VH-2*marg)*sc);
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.strokeRect(ox,oy,w*sc,VH*sc);
+  ctx.strokeStyle='#ea580c'; ctx.lineWidth=1.2; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(ox,oy+marg*sc); ctx.lineTo(ox+w*sc,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,oy+(VH-marg)*sc); ctx.lineTo(ox+w*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const lw=Math.max(1,ds/16*sc*.3);
+  ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
+  const spf=nbf>1?(w-2*cf)/(nbf-1):0;
+  for(let i=0;i<nbf;i++){
+    const bx=ox+(cf+i*spf)*sc;
+    ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
+    barPositionsOut.push({id:`FV${i+1}`,label:`F${i+1}`,cx:bx,cy:oy+VH*sc*.5,r:barR(df,sc)*.7,diam:df,type:'frontal-elev'});
+  }
+  // Estribos
+  ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
+  ctx.beginPath(); ctx.moveTo(ox+cf*sc,oy+marg*sc); ctx.lineTo(ox+(w-cf)*sc,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox+cf*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(w-cf)*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.setLineDash([]);
+
+  dimH(ox,ox+w*sc,oy-20,`${w} cm`);
+  dimV(oy+marg*sc,oy+(VH-marg)*sc,ox+w*sc+22,`${ih} cm`);
+  dimV(oy,oy+VH*sc,ox+w*sc+36,`${VH} cm`);
+
+  ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText('Vista Frontal',ox+w*sc/2,oy+VH*sc+14);
 }
 
 // ── Capa de barras ────────────────────────────────────────────────
@@ -462,10 +564,17 @@ function drawCracks(ctx, cracks, crackPts) {
 function drawAnnotations(ctx, annotations) {
   annotations.forEach(ann => {
     ctx.save();
-    ctx.font=`600 12px ${FONT}`; ctx.fillStyle='#1e40af';
-    ctx.strokeStyle='rgba(255,255,255,.85)'; ctx.lineWidth=3;
-    ctx.textAlign='left';
-    ctx.strokeText(ann.text,ann.x,ann.y);
+    // Caja de fondo
+    ctx.font=`600 12px ${FONT}`;
+    const tw = ctx.measureText(ann.text).width;
+    ctx.fillStyle='rgba(255,255,255,.88)';
+    ctx.strokeStyle='#1e40af';
+    ctx.lineWidth=1.5;
+    const pad=4;
+    ctx.beginPath();
+    ctx.roundRect(ann.x-pad, ann.y-14, tw+pad*2, 18, 3);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle='#1e40af'; ctx.textAlign='left';
     ctx.fillText(ann.text,ann.x,ann.y);
     ctx.restore();
   });
@@ -495,6 +604,31 @@ function drawCustomStirrups(ctx, customStirrups, barPositions) {
   });
 }
 
+// ── Vistas disponibles por estructura ────────────────────────────
+const STRUCT_VIEWS = {
+  'pilar-rect': [
+    { id:'section',   label:'Planta'  },
+    { id:'elevation', label:'Sección' },
+    { id:'lateral',   label:'Lateral' },
+    { id:'frontal',   label:'Frontal' },
+  ],
+  'pilar-circ': [
+    { id:'section',   label:'Planta'  },
+    { id:'elevation', label:'Alzado'  },
+  ],
+  'viga': [
+    { id:'section',   label:'Sección' },
+    { id:'elevation', label:'Alzado'  },
+  ],
+  default: [
+    { id:'section', label:'Planta' },
+  ],
+};
+
+function getViews(struct) {
+  return STRUCT_VIEWS[struct] || STRUCT_VIEWS.default;
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────
@@ -506,15 +640,17 @@ export default function CanvasEditor() {
 
   const cvRef         = useRef(null);
   const ctxRef        = useRef(null);
-  const pickedZoneRef = useRef(null);   // offscreen canvas
-  const pickHistRef   = useRef([]);     // undo stack
+  const pickedZoneRef = useRef(null);
+  const pickHistRef   = useRef([]);
   const drawingRef    = useRef(false);
   const lastPtRef     = useRef(null);
   const crackPtsRef   = useRef(null);
-  const dragAnnRef    = useRef(null);   // index de anotacion arrastrando
+  const dragAnnRef    = useRef(null);
   const [cvSize, setCvSize] = useState({ W: 400, H: 328 });
 
-  // barPositions y sectionBounds viven en refs (reconstruidos en cada redraw)
+  // Inline annotation input
+  const [annInput, setAnnInput] = useState(null); // {x,y,text,editIndex}
+
   const barPosRef    = useRef([]);
   const secBoundsRef = useRef({ ox:0, oy:0, sw:1, sh:1 });
 
@@ -590,23 +726,26 @@ export default function CanvasEditor() {
         'escalera':   drawEscalera,
       };
       fn[struct]?.(ctx, p, W, H, bps, sb);
-    } else {
+    } else if (view === 'elevation') {
       if      (struct==='pilar-rect') drawElevationPilarRect(ctx,p,W,H,bps,sb);
       else if (struct==='viga')       drawViga(ctx,p,W,H,bps,sb);
       else {
         const fn={'pilar-circ':drawPilarCirc,'forjado':drawForjado,'zapata':drawZapata,'escalera':drawEscalera};
         fn[struct]?.(ctx,p,W,H,bps,sb);
       }
+    } else if (view === 'lateral') {
+      if (struct==='pilar-rect') drawLateralPilarRect(ctx,p,W,H,bps,sb);
+    } else if (view === 'frontal') {
+      if (struct==='pilar-rect') drawFrontalPilarRect(ctx,p,W,H,bps,sb);
     }
 
     barPosRef.current    = bps;
     secBoundsRef.current = sb;
 
-    // Actualizar bounds en estado global (para la exportacion DXF)
     dispatch({ type: 'SET_BAR_POSITIONS', payload: bps });
     dispatch({ type: 'SET_SECTION_BOUNDS', payload: { ...sb } });
 
-    // Capa 2: zona pintada (offscreen canvas)
+    // Capa 2: zona pintada
     const pc = pickedZoneRef.current;
     if (pc && pc.width > 0) {
       ctx.save(); ctx.globalAlpha = 1;
@@ -639,7 +778,6 @@ export default function CanvasEditor() {
     };
   }
 
-  // ── Hit test de barra ───────────────────────────────────────────
   function _hitBar(x, y) {
     return barPosRef.current.find(b => {
       const dx=b.cx-x, dy=b.cy-y;
@@ -647,15 +785,14 @@ export default function CanvasEditor() {
     });
   }
 
-  // ── Hit test de anotacion ───────────────────────────────────────
   function _hitAnnotation(x, y) {
     return annotations.findIndex(a => {
       const dx=a.x-x, dy=a.y-y;
-      return Math.sqrt(dx*dx+dy*dy) <= 16;
+      return Math.sqrt(dx*dx+dy*dy) <= 18;
     });
   }
 
-  // ── Eventos de pintura ──────────────────────────────────────────
+  // ── Eventos ─────────────────────────────────────────────────────
   function handlePointerDown(e) {
     e.preventDefault();
     const { x, y } = _pos(e);
@@ -664,9 +801,10 @@ export default function CanvasEditor() {
       const idx = _hitAnnotation(x, y);
       if (idx >= 0) {
         dragAnnRef.current = idx;
+        drawingRef.current = true;
       } else {
-        const text = window.prompt('Texto de anotación:');
-        if (text?.trim()) dispatch({ type: 'ADD_ANNOTATION', payload: { x, y, text: text.trim() } });
+        // Mostrar input inline
+        setAnnInput({ x, y, text: '', editIndex: -1 });
       }
       return;
     }
@@ -688,7 +826,6 @@ export default function CanvasEditor() {
       return;
     }
 
-    // bar status cycle on click (pick mode)
     if (tool === 'pick' || tool === 'erase') {
       const bar = _hitBar(x, y);
       if (bar && tool === 'pick') {
@@ -720,7 +857,6 @@ export default function CanvasEditor() {
     }
 
     if (tool === 'pick' || tool === 'erase') {
-      // Interpolate for smooth strokes
       if (lastPtRef.current) {
         const dx = x - lastPtRef.current.x, dy = y - lastPtRef.current.y;
         const dist = Math.sqrt(dx*dx+dy*dy);
@@ -761,14 +897,12 @@ export default function CanvasEditor() {
       pctx.beginPath(); pctx.arc(x, y, brush, 0, Math.PI*2);
       pctx.fillStyle = 'rgba(251,146,60,.45)'; pctx.fill();
       pctx.strokeStyle = 'rgba(234,88,12,.55)'; pctx.lineWidth = .8; pctx.stroke();
-      // Guardar trazo en estado global para exportacion DXF
       dispatch({ type: 'ADD_PICKED_STROKE', payload: { cx: x, cy: y, r: brush } });
     } else if (tool === 'erase') {
       pctx.globalCompositeOperation = 'destination-out';
       pctx.beginPath(); pctx.arc(x, y, brush*1.5, 0, Math.PI*2);
       pctx.fillStyle = 'rgba(0,0,0,1)'; pctx.fill();
       pctx.globalCompositeOperation = 'source-over';
-      // Eliminar trazos cercanos al area borrada
       const erR = brush * 1.5;
       dispatch({
         type: 'SET_PICKED_STROKES',
@@ -794,11 +928,23 @@ export default function CanvasEditor() {
     dispatch({ type: 'CLEAR_CANVAS' });
   }
 
+  function _confirmAnnotation(x, y, text, editIndex) {
+    const t = text.trim();
+    if (!t) return;
+    if (editIndex >= 0) {
+      dispatch({ type: 'UPDATE_ANNOTATION', index: editIndex, changes: { text: t } });
+    } else {
+      dispatch({ type: 'ADD_ANNOTATION', payload: { x, y, text: t } });
+    }
+  }
+
   const cursorStyle = tool === 'erase'
     ? 'cell'
     : tool === 'crack' || tool === 'annotate'
       ? 'crosshair'
       : 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\'%3E%3Ccircle cx=\'12\' cy=\'12\' r=\'10\' fill=\'none\' stroke=\'%23ea580c\' stroke-width=\'2\'/%3E%3C/svg%3E") 12 12, crosshair';
+
+  const views = getViews(struct);
 
   return (
     <div className="canvas-editor">
@@ -806,18 +952,21 @@ export default function CanvasEditor() {
       <div className="cv-toolbar">
         <div className="cv-tools">
           {[
-            { id:'pick',       icon:'🖌️', label:'Brocha' },
-            { id:'erase',      icon:'◻', label:'Borrar' },
-            { id:'crack',      icon:'⚡', label:'Fisura' },
-            { id:'annotate',   icon:'📝', label:'Nota' },
-            { id:'select-bar', icon:'⊙',  label:'Selec.' },
+            { id:'pick',       icon:'🖌️', label:'Pintar'   },
+            { id:'erase',      icon:'◻',  label:'Borrar'   },
+            { id:'crack',      icon:'⚡',  label:'Fisura'   },
+            { id:'annotate',   icon:'📝',  label:'Nota'     },
+            { id:'select-bar', icon:'⊙',   label:'Sel. Barra'},
           ].map(t => (
             <button
               key={t.id}
               className={`cv-tool-btn ${tool===t.id?'active':''}`}
               onClick={() => dispatch({ type:'SET_TOOL', payload:t.id })}
               title={t.label}
-            >{t.icon}</button>
+            >
+              <span className="cv-tool-icon">{t.icon}</span>
+              <span className="cv-tool-label">{t.label}</span>
+            </button>
           ))}
         </div>
 
@@ -833,20 +982,58 @@ export default function CanvasEditor() {
           </div>
         )}
 
+        {tool==='select-bar' && (
+          <div className="cv-stirrup-row">
+            {selectedBars.length >= 2 && (
+              <button
+                className="cv-btn cv-btn-add-stirrup"
+                onClick={() => {
+                  dispatch({ type:'ADD_CUSTOM_STIRRUP', payload:{ barIds:[...selectedBars] } });
+                  dispatch({ type:'SET_SELECTED_BARS', payload:[] });
+                }}
+              >
+                + Estribo
+              </button>
+            )}
+            {selectedBars.length > 0 && (
+              <button
+                className="cv-btn"
+                onClick={() => dispatch({ type:'SET_SELECTED_BARS', payload:[] })}
+              >
+                ✕ Sel.
+              </button>
+            )}
+            {customStirrups.length > 0 && (
+              <button
+                className="cv-btn danger"
+                onClick={() => dispatch({ type:'CLEAR_CUSTOM_STIRRUPS' })}
+                title="Borrar todos los estribos añadidos"
+              >
+                ✕ Estrib.
+              </button>
+            )}
+            {selectedBars.length === 0 && customStirrups.length === 0 && (
+              <span className="cv-label">Clic en 2+ barras, luego "+ Estribo"</span>
+            )}
+          </div>
+        )}
+
         <div className="cv-actions">
-          <button className="cv-btn" onClick={handleUndo} title="Deshacer">↩</button>
-          <button className="cv-btn danger" onClick={handleClear} title="Limpiar">✕</button>
+          <button className="cv-btn" onClick={handleUndo} title="Deshacer último trazo">↩ Deshacer</button>
+          <button className="cv-btn danger" onClick={handleClear} title="Limpiar vista actual">✕ Limpiar</button>
         </div>
 
-        <div className="cv-view-toggle">
-          {['section','elevation'].map(v => (
-            <button
-              key={v}
-              className={`cv-view-btn ${view===v?'active':''}`}
-              onClick={() => dispatch({ type:'SET_VIEW', payload:v })}
-            >{v==='section'?'Sección':'Alzado'}</button>
-          ))}
-        </div>
+        {views.length > 1 && (
+          <div className="cv-view-toggle">
+            {views.map(v => (
+              <button
+                key={v.id}
+                className={`cv-view-btn ${view===v.id?'active':''}`}
+                onClick={() => dispatch({ type:'SET_VIEW', payload:v.id })}
+              >{v.label}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Canvas */}
@@ -860,11 +1047,40 @@ export default function CanvasEditor() {
           onPointerLeave={handlePointerUp}
           onContextMenu={e=>e.preventDefault()}
         />
+
+        {/* Input inline para anotaciones */}
+        {annInput && (
+          <div
+            className="ann-input-wrap"
+            style={{ left: annInput.x, top: annInput.y - 16 }}
+          >
+            <input
+              autoFocus
+              className="ann-input"
+              value={annInput.text}
+              placeholder="Texto de anotación..."
+              onChange={e => setAnnInput(v => ({ ...v, text: e.target.value }))}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  _confirmAnnotation(annInput.x, annInput.y, annInput.text, annInput.editIndex);
+                  setAnnInput(null);
+                } else if (e.key === 'Escape') {
+                  setAnnInput(null);
+                }
+              }}
+              onBlur={() => {
+                _confirmAnnotation(annInput.x, annInput.y, annInput.text, annInput.editIndex);
+                setAnnInput(null);
+              }}
+            />
+            <span className="ann-input-hint">Enter para confirmar · Esc para cancelar</span>
+          </div>
+        )}
       </div>
 
       {/* Info */}
       <div className="cv-info">
-        {struct} · {view}
+        {struct} · {views.find(v=>v.id===view)?.label || view}
         {state.pickedStrokes.length > 0 && (
           <span className="cv-pick-count"> · {state.pickedStrokes.length} trazos pintados</span>
         )}

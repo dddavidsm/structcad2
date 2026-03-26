@@ -438,9 +438,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     _note(msp,PX+W*.65,PY+D*.7,
           PX+W+32,PY+D*.8,
-          [f"{nbf}O{df:.0f}mm cara front.",
-           f"{nbl}O{dl:.0f}mm cara lat.",
-           f"Estribo O{ds:.0f}mm"])
+          [f"{nbf}Ø{df:.0f}mm cara frontal",
+           f"{nbl}Ø{dl:.0f}mm cara lateral",
+           f"Estribo Ø{ds:.0f}mm",
+           f"Recub. front.={cf:.0f}cm  lat.={cl:.0f}cm"])
 
     _T(msp,PX-16,PY+D/2,2.5,"LATERAL","TEXTO",
        TextEntityAlignment.CENTER,90.0)
@@ -450,96 +451,82 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # ── 2. VISTA LATERAL ─────────────────────────────────────────
     # Pilar visto de lado: ancho=D, altura total VH
-    # Zona picada central (altura ih), intacta arriba y abajo
+    # Sin picado predefinido: hormigon intacto en toda la vista
     VH   = ih+80
-    marg = 35  # margen intacto en cm
+    marg = 35  # zona de inspeccion (cm)
     LX   = -22.0
     LY   = -(VH+55)
 
     zt=LY+VH-marg; zb=LY+marg
 
-    # Intacto arriba + abajo (gris)
-    _fill_gray(msp,_rpts(LX,LY+VH-marg,D,marg))
-    _fill_gray(msp,_rpts(LX,LY,D,marg))
-
-    # Picado central con bordes ondulados
-    wp_top=_wavy_pts(LX,zt,LX+D,zt,amp=3.0,waves=4)
-    wp_bot=_wavy_pts(LX,zb,LX+D,zb,amp=3.0,waves=4)
-    pic_l  = wp_top+[(LX+D,zb)]+list(reversed(wp_bot))+[(LX,zt)]
-    _fill_picado(msp,pic_l)
-
-    _wavy_line(msp,LX,zt,LX+D,zt,amp=3,waves=4,layer="SECCION",lw=25)
-    _wavy_line(msp,LX,zb,LX+D,zb,amp=3,waves=4,layer="SECCION",lw=25)
+    # Hormigon intacto en toda la vista lateral
+    _fill_gray(msp,_rpts(LX,LY,D,VH))
     _rect(msp,LX,LY,D,VH,"SECCION",lw=70)
 
-    # Barras longitudinales (lineas verticales en zona picada)
+    # Lineas de zona inspeccionada (sin trama de picado)
+    _L(msp,LX,zt,LX+D,zt,"COTAS",lw=13)
+    _L(msp,LX,zb,LX+D,zb,"COTAS",lw=13)
+
+    # Barras longitudinales a lo largo de toda la vista
     for i in range(nbl):
         bx=LX+cl+i*spl
-        _L(msp,bx,zb-2,bx,zt+2,"ARMADURA",lw=max(18,int(dl*5)))
+        _L(msp,bx,LY+2,bx,LY+VH-2,"ARMADURA",lw=max(18,int(dl*5)))
 
-    # Estribos
+    # Estribos en zona de inspeccion
     _L(msp,LX+cl,zt-2,LX+D-cl,zt-2,"ESTRIBOS",lw=25)
     _L(msp,LX+cl,zb+2,LX+D-cl,zb+2,"ESTRIBOS",lw=25)
 
     # Cotas
-    _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f}",ht=2.2)
-    _dim_h(msp,LX,LX+cl,LY-18,LY,f"{cl:.0f}",ht=1.8)
-    if nbl>1: _dim_h(msp,LX+cl,LX+cl+spl,LY-18,LY,f"{spl:.0f}",ht=1.8)
-    _dim_h(msp,LX+D-cl,LX+D,LY-18,LY,f"{cl:.0f}",ht=1.8)
+    _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)
+    _dim_h(msp,LX,LX+cl,LY-18,LY,f"r={cl:.0f} cm",ht=1.8)
+    if nbl>1 and spl>0:
+        _dim_h(msp,LX+cl,LX+cl+spl,LY-26,LY,f"sep={spl:.0f} cm",ht=1.8)
 
     xv=LX+D+12
-    _dim_v(msp,LY,LY+VH,xv+8,LX+D,f"{VH:.0f}",ht=2.0)
-    _dim_v(msp,zb,zt,xv,LX+D,f"{ih:.0f}",ht=2.0)
-    _dim_v(msp,LY,LY+marg,xv+16,LX+D,f"{marg:.0f}",ht=1.8)
+    _dim_v(msp,LY,LY+VH,xv+8,LX+D,f"{VH:.0f} cm",ht=2.0)
+    _dim_v(msp,zb,zt,xv,LX+D,f"insp={ih:.0f} cm",ht=2.0)
+    _dim_v(msp,LY,LY+marg,xv+16,LX+D,f"{marg:.0f} cm",ht=1.8)
 
-    _note(msp,LX,(zt+zb)/2,LX-32,(zt+zb)/2+5,
-          [f"{nbl}O{dl:.0f}mm",f"Est. O{ds:.0f}mm"])
-
-    _T(msp,LX+D/2,LY-28,2.5,"35 cm","COTAS",TextEntityAlignment.CENTER)
-    _title(msp,LX+D/2,LY-38,"VISTA LATERAL")
+    _note(msp,LX,(zt+zb)/2,LX-35,(zt+zb)/2+5,
+          [f"{nbl}Ø{dl:.0f}mm long.",f"Est. Ø{ds:.0f}mm",f"Recub. lat.={cl:.0f}cm"])
+    _title(msp,LX+D/2,LY-32,"VISTA LATERAL")
 
     # ── 3. VISTA FRONTAL ─────────────────────────────────────────
+    # Sin picado predefinido: hormigon intacto en toda la vista
     FX=D+45.0; FY=LY
     zt_f=FY+VH-marg; zb_f=FY+marg
 
-    _fill_gray(msp,_rpts(FX,FY+VH-marg,W,marg))
-    _fill_gray(msp,_rpts(FX,FY,W,marg))
-
-    wp_ft=_wavy_pts(FX,zt_f,FX+W,zt_f,amp=3.5,waves=5)
-    wp_fb=_wavy_pts(FX,zb_f,FX+W,zb_f,amp=3.5,waves=5)
-    pic_f = wp_ft+[(FX+W,zb_f)]+list(reversed(wp_fb))+[(FX,zt_f)]
-    _fill_picado(msp,pic_f)
-
-    _wavy_line(msp,FX,zt_f,FX+W,zt_f,amp=3.5,waves=5,layer="SECCION",lw=25)
-    _wavy_line(msp,FX,zb_f,FX+W,zb_f,amp=3.5,waves=5,layer="SECCION",lw=25)
+    # Hormigon intacto en toda la vista frontal
+    _fill_gray(msp,_rpts(FX,FY,W,VH))
     _rect(msp,FX,FY,W,VH,"SECCION",lw=70)
 
-    # Barras frontales (lineas verticales)
+    # Lineas de zona inspeccionada
+    _L(msp,FX,zt_f,FX+W,zt_f,"COTAS",lw=13)
+    _L(msp,FX,zb_f,FX+W,zb_f,"COTAS",lw=13)
+
+    # Barras frontales a lo largo de toda la vista
     for i in range(nbf):
         bx=FX+cf+i*spf
-        _L(msp,bx,zb_f-2,bx,zt_f+2,"ARMADURA",lw=max(18,int(df*5)))
+        _L(msp,bx,FY+2,bx,FY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
 
     _L(msp,FX+cf,zt_f-2,FX+W-cf,zt_f-2,"ESTRIBOS",lw=25)
     _L(msp,FX+cf,zb_f+2,FX+W-cf,zb_f+2,"ESTRIBOS",lw=25)
 
     # Cotas
-    yf1=FY-10; yf2=FY-18
-    _dim_h(msp,FX,FX+W,yf2,FY,f"{W:.0f}",ht=2.2)
-    _dim_h(msp,FX,FX+cf,yf1,FY,f"{cf:.0f}",ht=1.8)
+    yf1=FY-10; yf2=FY-20
+    _dim_h(msp,FX,FX+W,yf2,FY,f"{W:.0f} cm",ht=2.2)
+    _dim_h(msp,FX,FX+cf,yf1,FY,f"r={cf:.0f} cm",ht=1.8)
     if nbf>1 and spf>0:
-        _dim_h(msp,FX+cf,FX+cf+spf,yf1,FY,f"{spf:.0f}",ht=1.8)
-    _dim_h(msp,FX+W-cf,FX+W,yf1,FY,f"{cf:.0f}",ht=1.8)
+        _dim_h(msp,FX+cf,FX+cf+spf,yf1-10,FY,f"sep={spf:.0f} cm",ht=1.8)
 
     xvf=FX+W+12
-    _dim_v(msp,FY,FY+VH,xvf+8,FX+W,f"{VH:.0f}",ht=2.0)
-    _dim_v(msp,zb_f,zt_f,xvf,FX+W,f"{ih:.0f}",ht=2.0)
+    _dim_v(msp,FY,FY+VH,xvf+8,FX+W,f"{VH:.0f} cm",ht=2.0)
+    _dim_v(msp,zb_f,zt_f,xvf,FX+W,f"insp={ih:.0f} cm",ht=2.0)
 
     _note(msp,FX+W*.65,zt_f-ih*.3,
-          FX+W+28,zt_f+5,
-          [f"8 Barres O{df:.0f}mm",f"O{ds:.0f}mm",f"r={cf:.0f}cm"])
-
-    _T(msp,FX+W/2,FY-28,2.5,f"{W:.0f} cm","COTAS",TextEntityAlignment.CENTER)
-    _title(msp,FX+W/2,FY-40,"VISTA FRONTAL")
+          FX+W+30,zt_f+5,
+          [f"{nbf}Ø{df:.0f}mm cara front.",f"Est. Ø{ds:.0f}mm",f"Recub. front.={cf:.0f}cm"])
+    _title(msp,FX+W/2,FY-32,"VISTA FRONTAL")
 
     _cajetin(msp,FX+W+28,FY-55,_caj(data))
     return _out(doc)
@@ -579,7 +566,7 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
 
     _dim_h(msp,-R,R,-R-14,-R,f"O{diam:.0f}cm",ht=2.5)
     _note(msp,R*.7,R*.7,R+25,R*.8,
-          [f"{nb}O{db:.0f}mm long.",f"Espiral O{ds:.0f}mm",f"Recub: {cov:.0f}cm"])
+          [f"{nb}Ø{db:.0f}mm long.",f"Espiral Ø{ds:.0f}mm",f"Recub: {cov:.0f}cm"])
     _title(msp,0,R+10,"SECCION EN PLANTA")
 
     # ALZADO
@@ -653,10 +640,10 @@ def generate_dxf_beam(data) -> io.BytesIO:
     _dim_v(msp,0,cov,W+20,W,f"{cov:.0f}",ht=1.8)
 
     _note(msp,W*.7,cov,W+28,H*.15,
-          [f"Est. O{ds:.0f}@{sps:.0f}cm",
-           f"{nbt}O{dbt:.0f}mm sup.",
-           f"{nbb}O{dbb:.0f}mm inf.",
-           f"Recub: {cov:.0f}cm"])
+          [f"Est. Ø{ds:.0f}mm @{sps:.0f}cm",
+           f"{nbt}Ø{dbt:.0f}mm armad. sup.",
+           f"{nbb}Ø{dbb:.0f}mm armad. inf.",
+           f"Recubrimiento: {cov:.0f}cm"])
     _title(msp,W/2,H+10,"SECCION TRANSVERSAL")
 
     # ALZADO LONGITUDINAL
@@ -691,7 +678,7 @@ def generate_dxf_beam(data) -> io.BytesIO:
     _dim_v(msp,AY,AY+H,AX+TL+12,AX+TL,f"{H:.0f}",ht=2.2)
     _dim_h(msp,AX+mg,AX+mg+sps,AY+H+6,AY+H,f"{sps:.0f}",ht=1.8)
 
-    _title(msp,AX+TL/2,AY+H+12,"ALZAT (ZONA INSPECCION)")
+    _title(msp,AX+TL/2,AY+H+12,"ALZADO (ZONA INSPECCION)")
     _cajetin(msp,AX+TL+12,AY-55,_caj(data))
     return _out(doc)
 
