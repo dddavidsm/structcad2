@@ -2,6 +2,11 @@ import { STRUCTS, getParamsFromValues } from '../config/structures.js';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+/** Precalienta el servidor Render con un ping silencioso al cargar la app */
+export function warmupServer() {
+  fetch(`${API_BASE}/api/health`).catch(() => {});
+}
+
 /**
  * Exporta la inspeccion actual a DXF via el backend FastAPI.
  * @param {object} state        Estado global de inspeccion
@@ -29,7 +34,13 @@ export async function exportDXF(state, onStatus) {
   // Circulos pintados normalizados → picado en el DXF
   p.picked_circles = _normalizeStrokes(pickedStrokes || [], sectionBounds);
 
-  onStatus('spin', 'Generando DXF…');
+  onStatus('spin', 'Conectando con el servidor…');
+
+  // Si el servidor está arrancando (Render free tier), avisa al usuario tras 8 s
+  const coldStartTimer = setTimeout(
+    () => onStatus('spin', 'Iniciando servidor… puede tardar ~1 min la primera vez'),
+    8000,
+  );
 
   try {
     const res = await fetch(`${API_BASE}${def.endpoint}`, {
@@ -37,6 +48,8 @@ export async function exportDXF(state, onStatus) {
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(p),
     });
+
+    clearTimeout(coldStartTimer);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
@@ -60,6 +73,7 @@ export async function exportDXF(state, onStatus) {
     onStatus('ok', `✓ ${filename}`);
     return { ok: true, params: p, label: def.label, filename };
   } catch (e) {
+    clearTimeout(coldStartTimer);
     onStatus('err', `Error: ${e.message}`);
     return { ok: false };
   }

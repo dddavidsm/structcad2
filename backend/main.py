@@ -1,7 +1,7 @@
 """StructCAD Pro v2 — FastAPI backend con motor DXF validado"""
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Optional, List, Any
@@ -131,10 +131,11 @@ class StairData(InspectionBase):
     relleno_type: Optional[str] = "Mortero/Cascote"
     depth_no_rebar: Optional[float] = None
 
-def _stream(buf: io.BytesIO, filename: str) -> StreamingResponse:
-    buf.seek(0)  # garantizar posicion al inicio antes de streamear
-    return StreamingResponse(
-        buf,
+def _stream(buf: io.BytesIO, filename: str) -> Response:
+    buf.seek(0)
+    content = buf.read()
+    return Response(
+        content=content,
         media_type="application/octet-stream",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

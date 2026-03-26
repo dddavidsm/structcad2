@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { useInspection } from './context/InspectionContext.jsx';
 import Header from './components/Layout/Header.jsx';
 import StructureSelector from './components/StructureSelector.jsx';
 import CanvasEditor from './components/Canvas/CanvasEditor.jsx';
 import InspectionForm from './components/Forms/InspectionForm.jsx';
 import InspectionHistory from './components/History/InspectionHistory.jsx';
+import { warmupServer } from './lib/api.js';
 import './App.css';
 
 function BottomNav() {
@@ -43,6 +45,9 @@ function WorkspaceBack() {
 export default function App() {
   const { state } = useInspection();
   const { page, step } = state;
+
+  // Pre-calentar el servidor Render en cuanto carga la app
+  useEffect(() => { warmupServer(); }, []);
 
   return (
     <div className="app-root">
