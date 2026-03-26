@@ -8,8 +8,8 @@ from typing import Optional, List, Any
 from pathlib import Path
 import io
 
-# Sirve la build React (npm run build) desde frontend-react/dist/
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend-react" / "dist"
+# Sirve la build React (npm run build) desde frontend/dist/
+FRONTEND_DIR = Path(__file__).parent.parent / "frontend" / "dist"
 
 from dxf_engine import (
     generate_dxf_pillar_rect, generate_dxf_pillar_circ,

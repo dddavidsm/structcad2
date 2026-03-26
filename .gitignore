@@ -8,8 +8,8 @@ backend/.venv/
 .env
 
 # Node / React
-frontend-react/node_modules/
-frontend-react/dist/
+frontend/node_modules/
+frontend/dist/
 
 # Environment
 .env.local

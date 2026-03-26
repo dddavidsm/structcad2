@@ -8,9 +8,9 @@ echo  =========================================
 echo.
 
 REM Compilar frontend React si la carpeta dist no existe
-if not exist "frontend-react\dist\index.html" (
+if not exist "frontend\dist\index.html" (
   echo  Compilando interfaz React (primera vez)...
-  cd frontend-react
+  cd frontend
   call npm install
   call npm run build
   cd ..

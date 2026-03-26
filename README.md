@@ -15,7 +15,7 @@ structcad2/
 │   ├── dxf_engine.py      ← Motor de generación DXF (ezdxf)
 │   └── requirements.txt   ← Dependencias Python
 │
-├── frontend-react/        ← SPA en React 18 + Vite
+├── frontend/        ← SPA en React 18 + Vite
 │   ├── src/
 │   │   ├── App.jsx
 │   │   ├── context/       ← Estado global (useReducer)
@@ -87,9 +87,9 @@ pip install -r requirements.txt
 ### 3. Frontend React
 
 ```bash
-cd frontend-react
+cd frontend
 npm install
-npm run build        # genera frontend-react/dist/
+npm run build        # genera frontend/dist/
 ```
 
 El backend sirve automáticamente la carpeta `dist/` generada.
@@ -112,7 +112,7 @@ Abrir en el navegador: **http://localhost:8000**
 Mientras el backend corre en `:8000`, abre una segunda terminal:
 
 ```bash
-cd frontend-react
+cd frontend
 npm run dev          # → http://localhost:5173
 ```
 
@@ -132,7 +132,7 @@ Sin Supabase la app funciona igualmente, pero el historial no persiste.
 2. Ir a **SQL Editor → New Query**, pegar y ejecutar el contenido de `supabase_schema.sql`
 3. Copiar el archivo de entorno:
    ```bash
-   cp frontend-react/.env.example frontend-react/.env.local
+   cp frontend/.env.example frontend/.env.local
    ```
 4. Rellenar las variables en `.env.local`:
    ```
@@ -141,7 +141,7 @@ Sin Supabase la app funciona igualmente, pero el historial no persiste.
    ```
 5. Reconstruir el frontend:
    ```bash
-   cd frontend-react && npm run build
+   cd frontend && npm run build
    ```
 
 ---
