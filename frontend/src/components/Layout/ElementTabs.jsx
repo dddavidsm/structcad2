@@ -9,12 +9,13 @@ export default function ElementTabs() {
   const elementos = carpeta?.elementos || {};
   const elementoActivo = state.elementoActivo;
 
-  // Saneamiento: tratar elementos como objeto
-  const elementosCount = Object.keys(elementos || {}).length;
+  const elementosArr = Object.values(elementos);
+  const elementosKeys = Object.keys(elementos);
+
   return (
     <div className="element-tabs">
-      {Object.values(elementos || {}).map((elemento, idx) => {
-        const eid = Object.keys(elementos)[idx];
+      {elementosArr.map((elemento, idx) => {
+        const eid = elementosKeys[idx];
         return (
           <div
             key={eid}
@@ -35,7 +36,7 @@ export default function ElementTabs() {
       >
         +
       </button>
-      {/* Ejemplo de conteo: {elementosCount} elementos */}
+      <span className="tab-count">{elementosKeys.length} elementos</span>
     </div>
   );
 }

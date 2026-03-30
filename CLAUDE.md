@@ -1,13 +1,19 @@
 # Contexto del Proyecto: StructCAD Pro v2
 Aplicación para la generación de planos técnicos de inspección estructural.
-- **Frontend**: React 19 + Vite (en `/frontend`).
-- **Backend**: FastAPI + Pydantic + ezdxf (en `/backend`).
+- **Frontend**: React 19 + Vite. Desplegado en VERCEL (Root Directory: `frontend`).
+- **Backend**: FastAPI + Pydantic + ezdxf. Desplegado en RENDER.
 - **Base de Datos**: Supabase (PostgreSQL).
 
 # Comandos Críticos
 - Backend Dev: `cd backend && uvicorn main:app --reload`
 - Frontend Dev: `cd frontend && npm run dev`
-- Frontend Build: `cd frontend && npm run build` (El backend sirve esta build estática desde `/frontend/dist`).
+- Frontend Build: `cd frontend && npm install && npm run build` (Para validar errores de despliegue en Vercel).
+
+# ⚠️ REGLAS CRÍTICAS DE FRONTEND (ESTADO Y CRASHES)
+El estado en `InspectionContext.jsx` fue refactorizado. Para evitar crashes (`TypeError: Cannot read properties of undefined`):
+1. **Colecciones son OBJETOS**: `proyectos`, `carpetas` y `elementos` son diccionarios indexados por ID, NO arrays.
+2. **Prohibido `.length` y `.map()` directo**: Usa siempre `Object.values(obj || {}).map()` y `Object.keys(obj || {}).length`.
+3. **Blindaje de Elementos**: Los arrays internos del elemento activo deben extraerse con fallback de seguridad antes de usarse. Ejemplo: `const strokes = elementoActivo?.pickedStrokes || [];`. NUNCA asumas que existen.
 
 # Convenciones de Desarrollo
 ## Backend (FastAPI & ezdxf)
@@ -21,13 +27,14 @@ Aplicación para la generación de planos técnicos de inspección estructural.
 - Usa React Hooks y componentes funcionales.
 - Las llamadas a la API de Supabase usan el cliente oficial `@supabase/supabase-js`.
 - El manejo del estado del "canvas" de dibujo debe mantener siempre los círculos normalizados entre `0` y `1` antes de enviarlos por POST a FastAPI.
+- El archivo de configuración de Vercel debe estar en `frontend/vercel.json` con los `rewrites` a `/index.html` para la SPA.
 
 ## Supabase
 - Las inserciones van a la tabla `inspections`.
-- Los datos variables como el formulario o los trazos del canvas se guardan en las columnas JSONB (`form_data`, `bar_status`, `picked_circles`).
+- Los datos variables como el formulario o los trazos del canvas se guardan en JSONB (`form_data`, `bar_status`, `picked_circles`).
 
 # Reglas Operativas
-1. Revisa `/docs/ai/architecture.md` antes de proponer cambios en el flujo de datos entre el Canvas y el motor DXF.
+1. Revisa `/docs/ai/architecture.md` antes de proponer cambios en el flujo de datos entre el Canvas y DXF.
 2. Piensa paso a paso: detalla tu lógica matemática antes de modificar coordenadas en `dxf_engine.py`.
-3. DOCUMENTACIÓN CONTINUA: Cualquier cambio que afecte a la arquitectura, dependencias, flujo de datos o despliegue DEBE reflejarse inmediatamente en `README.md` y en `docs/ai/architecture.md`.
-4. ESTRICTA POLÍTICA DE DIRECTORIOS: Prohibido crear carpetas redundantes (ej. nada de `frontend-v2` o `backend_new`). Utiliza la estructura existente (`frontend/` y `backend/`). Solo puedes crear nuevos archivos/componentes si es estrictamente necesario para la organización interna.
+3. ESTRICTA POLÍTICA DE DIRECTORIOS: Prohibido crear carpetas redundantes (ej. `frontend-v2`). Utiliza la estructura existente (`frontend/` y `backend/`).
+4. Haz `grep` para buscar métodos conflictivos (como `.length` sin proteger) antes de dar por bueno un componente.

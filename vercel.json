@@ -1,6 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "https://structcad2-backend.onrender.com/api/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
-}

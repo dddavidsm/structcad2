@@ -172,5 +172,6 @@ def gen_stair(data: StairData):
 
 # ── Serve the frontend SPA (MUST be last — catches everything not matched above)
 # html=True means index.html is served for "/" and any unmatched path
+# IMPORTANT: mount on a sub-path to avoid capturing /api/* preflight (OPTIONS)
 if FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+    app.mount("/app", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

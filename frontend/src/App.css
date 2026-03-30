@@ -64,15 +64,21 @@ body {
 @media (max-width: 900px) {
   .workspace {
     flex-direction: column;
-    overflow-y: auto;
-    height: auto;
+    overflow: hidden;
+    height: 100%;
+  }
+  .workspace > .project-sidebar {
+    flex: 0 0 auto; /* thin horizontal bar, no grow */
   }
   .workspace-content {
     flex-direction: column;
-    overflow: visible;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
   }
   .workspace-content > .canvas-editor {
     min-height: 350px;
+    flex: 1;
   }
   .workspace-content > .form-panel {
     min-width: 0;

@@ -92,7 +92,7 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.strokeRect(ox,oy,w*sc,d*sc);
 
   // Estribo perimetral: dibujado en cover_stirrup — rodea visualmente las barras
-  const lw=Math.max(1.2,ds/16*sc*.3);
+  const lw=Math.max(1.5,ds/10*sc*.5);
   ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
   rrect(ox+cs*sc, oy+cs*sc, w*sc-2*cs*sc, d*sc-2*cs*sc, 2); ctx.stroke();
 

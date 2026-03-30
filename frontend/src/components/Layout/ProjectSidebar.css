@@ -90,3 +90,56 @@
   color: #3b82f6;
   background: #eff6ff;
 }
+
+/* ── Responsive: horizontal tab bar on tablet/mobile ── */
+@media (max-width: 900px) {
+  .project-sidebar {
+    width: 100%;
+    min-height: auto;
+    flex-direction: row;
+    align-items: center;
+    border-right: none;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.3rem 0.5rem;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  .sidebar-title {
+    margin-bottom: 0;
+    white-space: nowrap;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .sidebar-list {
+    flex-direction: row;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+  .sidebar-list li {
+    white-space: nowrap;
+    padding: 0.25em 0.6em;
+    font-size: 12px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+  }
+  .sidebar-list li.active {
+    background: #e0e7ff;
+    border-color: #93a3f8;
+  }
+  .sidebar-delete-btn { opacity: 1; font-size: 9px; }
+  .sidebar-add-item {
+    margin-top: 0;
+    min-height: auto;
+    padding: 0.25em 0.6em;
+    font-size: 13px;
+    border-radius: 12px;
+  }
+  .sidebar-edit-input { font-size: 12px; width: 80px; }
+}
