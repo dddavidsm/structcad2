@@ -19,7 +19,8 @@ export async function exportDXF(state, onStatus) {
   const { struct, formValues, barPositions, barStatus, cracks, annotations,
           view, pickedStrokes, sectionBounds } = state;
 
-  if (!struct) {
+  const def = STRUCTS[struct];
+  if (!struct || !def) {
     onStatus('err', 'Seleccione un tipo de estructura');
     return { ok: false };
   }
@@ -38,7 +39,7 @@ export async function exportDXF(state, onStatus) {
   );
 
   try {
-    const res = await fetch(`${API_URL}/api/generate/${struct}`, {
+    const res = await fetch(`${API_URL}/api${def.endpoint}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(p),

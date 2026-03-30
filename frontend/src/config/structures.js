@@ -22,6 +22,7 @@ export const STRUCTS = {
           { id: 'stirrup_diam',    l: 'Ø estribo',       u: 'mm', t: 'n', mn: 4, mx: 20, st: 2,  v: 6  },
           { id: 'stirrup_spacing', l: 'Separación',      u: 'cm', t: 'n', mn: 5, mx: 50, st: 5,  v: 15 },
           { id: 'cover_stirrup',   l: 'Recub. estribo',  u: 'cm', t: 'n', mn: 1, mx: 10, st: .5, v: 3  },
+          { id: 'estriboABarra',   l: 'Recub. est→barra',u: 'cm', t: 'n', mn: 0, mx: 10, st: .1, v: 0  },
         ]},
       ],
       inspeccion: [{ s: 'Zona inspeccionada', f: [

@@ -129,20 +129,8 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     }
   }
 
-  // === ESTRIBOS (LÍNEAS HORIZONTALES REPETIDAS) ===
-  // Usar separación de estribos del formulario (cm)
-  const stirrupSpacing = p.stirrup_spacing || 15;
-  const usableHeight = d - 2*cf;
-  const nStirrups = Math.floor(usableHeight / stirrupSpacing) + 1;
-  for (let i=0; i<nStirrups; i++) {
-    const y = oy + cf*sc + i*stirrupSpacing*sc;
-    ctx.beginPath();
-    ctx.moveTo(ox+cf*sc, y);
-    ctx.lineTo(ox+(w-cf)*sc, y);
-    ctx.strokeStyle = '#0077cc'; // color azul para estribos
-    ctx.lineWidth = lw*0.8;
-    ctx.stroke();
-  }
+  // === Estribos en planta NO se dibujan como líneas horizontales ===
+  // Solo el rectángulo perimetral (ya dibujado arriba) es visible en vista cenital
 
   // Barras laterales: SOLO INTERMEDIAS (esquinas = barras de la cara frontal)
   if (nbl>0) {
@@ -807,11 +795,15 @@ export default function CanvasEditor() {
       dispatch({ type: 'SET_BAR_POSITIONS', payload: bps });
     }
 
-    // Capa 2: zona pintada (offscreen canvas, dibujado en espacio de contenido)
+    // Capa 2: zona pintada — clipped al rectángulo de sección
     const pc = pickedZoneRef.current;
     if (pc && pc.width > 0) {
-      ctx.save(); ctx.globalAlpha = 1;
-      ctx.drawImage(pc, 0, 0, W, H); // W,H explicitos para escalar correctamente con zoom
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(sb.ox, sb.oy, sb.sw, sb.sh);
+      ctx.clip();
+      ctx.globalAlpha = 1;
+      ctx.drawImage(pc, 0, 0, W, H);
       ctx.restore();
     }
 
@@ -859,10 +851,16 @@ export default function CanvasEditor() {
   }
 
   function _hitAnnotation(x, y) {
-    return annotations.findIndex(a => {
-      const dx=a.x-x, dy=a.y-y;
-      return Math.sqrt(dx*dx+dy*dy) <= 18;
-    });
+    const ctx = ctxRef.current;
+    if (!ctx) return -1;
+    for (let i = annotations.length - 1; i >= 0; i--) {
+      const a = annotations[i];
+      ctx.font = `600 12px ${FONT}`;
+      const tw = ctx.measureText(a.text).width;
+      const pad = 6;
+      if (x >= a.x - pad && x <= a.x + tw + pad && y >= a.y - 16 && y <= a.y + 4) return i;
+    }
+    return -1;
   }
 
   // ── Eventos ─────────────────────────────────────────────────────
@@ -894,17 +892,11 @@ export default function CanvasEditor() {
     if (tool === 'annotate') {
       const idx = _hitAnnotation(x, y);
       if (idx >= 0) {
-        // Nota editable: doble propósito — prompt para editar texto al hacer clic en nota existente
-        const newText = window.prompt('Editar nota:', annotations[idx]?.text || '');
-        if (newText !== null) {
-          dispatch({ type: 'UPDATE_ANNOTATION', index: idx, changes: { text: newText.trim() } });
-        } else {
-          // Si cancela el prompt, arrastrar la nota
-          dragAnnRef.current = idx;
-          drawingRef.current = true;
-        }
+        // Single click en nota existente → arrastrar para reposicionar
+        dragAnnRef.current = idx;
+        drawingRef.current = true;
       } else {
-        // Mostrar input inline para nueva nota
+        // Clic en área vacía → nueva nota inline
         setAnnInput({ x, y, text: '', editIndex: -1 });
       }
       return;
@@ -1019,9 +1011,22 @@ export default function CanvasEditor() {
     fullRedraw();
   }
 
+  /** Doble-click en canvas: editar nota inline */
+  function handleDoubleClick(e) {
+    const { x, y } = _pos(e);
+    const idx = _hitAnnotation(x, y);
+    if (idx >= 0) {
+      const ann = annotations[idx];
+      setAnnInput({ x: ann.x, y: ann.y, text: ann.text, editIndex: idx });
+    }
+  }
+
   function _paint(x, y) {
     const pc   = pickedZoneRef.current;
     if (!pc)   return;
+    // Restringir pintura al rectángulo del plano
+    const sb = secBoundsRef.current;
+    if (x < sb.ox || x > sb.ox + sb.sw || y < sb.oy || y > sb.oy + sb.sh) return;
     const pctx = pc.getContext('2d');
 
     if (tool === 'pick') {
@@ -1163,6 +1168,7 @@ export default function CanvasEditor() {
         {views.length > 1 && (
           <div className="cv-view-toggle" style={{ display:'flex', alignItems:'center', gap:'6px' }}>
             <ViewSelector3D
+              struct={struct}
               view={view}
               onChangeView={v => dispatch({ type:'SET_VIEW', payload:v })}
             />
@@ -1189,6 +1195,7 @@ export default function CanvasEditor() {
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
           onPointerCancel={handlePointerUp}
+          onDoubleClick={handleDoubleClick}
           onContextMenu={e=>e.preventDefault()}
         />
 

@@ -140,32 +140,32 @@ def _stream(buf: io.BytesIO, filename: str) -> Response:
 def health():
     return {"status": "ok", "version": "2.1.0"}
 
-@app.post("/generate/pillar-rect")
+@app.post("/api/generate/pillar-rect")
 def gen_pilar_rect(data: PillarRectData):
     try: return _stream(generate_dxf_pillar_rect(data), f"pilar_rect_{data.element_id}.dxf")
     except Exception as e: raise HTTPException(500, str(e))
 
-@app.post("/generate/pillar-circ")
+@app.post("/api/generate/pillar-circ")
 def gen_pilar_circ(data: PillarCircData):
     try: return _stream(generate_dxf_pillar_circ(data), f"pilar_circ_{data.element_id}.dxf")
     except Exception as e: raise HTTPException(500, str(e))
 
-@app.post("/generate/beam")
+@app.post("/api/generate/beam")
 def gen_beam(data: BeamData):
     try: return _stream(generate_dxf_beam(data), f"viga_{data.element_id}.dxf")
     except Exception as e: raise HTTPException(500, str(e))
 
-@app.post("/generate/footing")
+@app.post("/api/generate/footing")
 def gen_footing(data: FootingData):
     try: return _stream(generate_dxf_footing(data), f"zapata_{data.element_id}.dxf")
     except Exception as e: raise HTTPException(500, str(e))
 
-@app.post("/generate/forjado")
+@app.post("/api/generate/forjado")
 def gen_forjado(data: ForjadoData):
     try: return _stream(generate_dxf_forjado(data), f"forjado_{data.element_id}.dxf")
     except Exception as e: raise HTTPException(500, str(e))
 
-@app.post("/generate/stair")
+@app.post("/api/generate/stair")
 def gen_stair(data: StairData):
     try: return _stream(generate_dxf_stair(data), f"escalera_{data.element_id}.dxf")
     except Exception as e: raise HTTPException(500, str(e))

@@ -78,17 +78,6 @@ export default function InspectionForm() {
   return (
     <div className="form-panel">
       {/* Titulo */}
-      <div className="form-group">
-        <label htmlFor="estriboABarra">Recubrimiento estribo a barra (cm)</label>
-        <input
-          id="estriboABarra"
-          type="number"
-          min="0"
-          step="0.1"
-          value={formValues.estriboABarra || ''}
-          onChange={e => setFormValue('estriboABarra', parseFloat(e.target.value) || 0)}
-        />
-      </div>
       <div className="form-header">
         <span className="form-title">{def.label}</span>
       </div>
@@ -121,23 +110,6 @@ export default function InspectionForm() {
                   onChange={v => setFormValue(field.id, v)}
                 />
               ))}
-                {/* Campo adicional para separación de estribos */}
-                {sec.s.toLowerCase().includes('armadura') && (
-                  <FormField
-                    key="stirrup_spacing"
-                    field={{
-                      id: 'stirrup_spacing',
-                      label: 'Separación de estribos (cm)',
-                      type: 'number',
-                      v: 15,
-                      min: 4,
-                      max: 50,
-                      step: 1
-                    }}
-                    value={formValues['stirrup_spacing'] !== undefined ? formValues['stirrup_spacing'] : 15}
-                    onChange={v => setFormValue('stirrup_spacing', v)}
-                  />
-                )}
             </div>
           </div>
         ))}

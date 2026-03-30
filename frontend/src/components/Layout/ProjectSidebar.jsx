@@ -42,10 +42,11 @@ export default function ProjectSidebar() {
                     setEditingId(null);
                   }
                 }}
-                style={{ width: '90%' }}
+                onClick={e => e.stopPropagation()}
+                className="sidebar-edit-input"
               />
             ) : (
-              <span>{pag?.nombre}</span>
+              <span className="sidebar-pagina-name">{pag?.nombre}</span>
             )}
             {entries.length > 1 && (
               <button
@@ -53,22 +54,21 @@ export default function ProjectSidebar() {
                 title="Eliminar plano"
                 onClick={e => {
                   e.stopPropagation();
-                  if (window.confirm(`¿Eliminar "${pag?.nombre}"?`)) {
-                    if (pid === paginaActiva) dispatch({ type: 'SET_PAGINA_ACTIVA', payload: pid });
-                    dispatch({ type: 'DELETE_PAGINA' });
-                  }
+                  dispatch({ type: 'DELETE_PAGINA' });
                 }}
               >✕</button>
             )}
           </li>
         ))}
+        {/* Añadir nuevo plano inline */}
+        <li
+          className="sidebar-add-item"
+          onClick={() => dispatch({ type: 'ADD_PAGINA', nombre: `Plano ${entries.length + 1}` })}
+          title="Añadir plano"
+        >
+          <span>＋</span>
+        </li>
       </ul>
-      <button
-        className="sidebar-add-btn"
-        onClick={() => dispatch({ type: 'SET_STEP', payload: 1 })}
-      >
-        + Nuevo Plano
-      </button>
     </aside>
   );
 }
