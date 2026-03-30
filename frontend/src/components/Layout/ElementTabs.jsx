@@ -9,9 +9,10 @@ export default function ElementTabs() {
   const elementos = carpeta?.elementos || {};
   const elementoActivo = state.elementoActivo;
 
+  // Saneamiento: tratar elementos como objeto
   return (
     <div className="element-tabs">
-      {Object.entries(elementos ?? {}).map(([eid, elemento]) => (
+      {Object.entries(elementos || {}).map(([eid, elemento]) => (
         <div
           key={eid}
           className={`tab ${eid === elementoActivo ? 'active' : ''}`}
