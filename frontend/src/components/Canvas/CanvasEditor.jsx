@@ -618,11 +618,10 @@ function getViews(struct) {
 export default function CanvasEditor() {
   const { state, dispatch, getParams } = useInspection();
   // Selección del elemento activo
-  const proyecto = state.proyectos[state.proyectoActivo];
-  const carpeta = proyecto.carpetas[state.carpetaActiva];
-  const elemento = carpeta.elementos[state.elementoActivo];
-  // Si no hay elemento, no renderizar
-  if (!elemento) return null;
+  const proyecto = state.proyectos?.[state.proyectoActivo];
+  const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
+  const elemento = carpeta?.elementos?.[state.elementoActivo];
+  if (!elemento) return <div className="empty-state">Selecciona o crea una estructura en la barra lateral para comenzar.</div>;
   const { formValues, barStatus, cracks, annotations, customStirrups, selectedBars } = elemento;
   const { struct, view, tool, brush } = state;
 

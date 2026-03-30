@@ -4,8 +4,8 @@ import { useInspection } from '../../context/InspectionContext.jsx';
 
 export default function ProjectSidebar() {
   const { state, dispatch } = useInspection();
-  const proyecto = state.proyectos[state.proyectoActivo];
-  const carpetas = proyecto ? proyecto.carpetas : {};
+  const proyecto = state.proyectos?.[state.proyectoActivo];
+  const carpetas = proyecto?.carpetas || {};
   const carpetaActiva = state.carpetaActiva;
 
   return (

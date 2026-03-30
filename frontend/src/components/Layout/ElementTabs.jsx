@@ -4,9 +4,9 @@ import { useInspection } from '../../context/InspectionContext.jsx';
 
 export default function ElementTabs() {
   const { state, dispatch } = useInspection();
-  const proyecto = state.proyectos[state.proyectoActivo];
-  const carpeta = proyecto.carpetas[state.carpetaActiva];
-  const elementos = carpeta ? carpeta.elementos : {};
+  const proyecto = state.proyectos?.[state.proyectoActivo];
+  const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
+  const elementos = carpeta?.elementos || {};
   const elementoActivo = state.elementoActivo;
 
   return (

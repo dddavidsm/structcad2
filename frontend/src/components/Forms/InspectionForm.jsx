@@ -21,10 +21,10 @@ const TAB_LABELS = {
 
 export default function InspectionForm() {
   const { state, dispatch, setFormValue, getParams } = useInspection();
-  const proyecto = state.proyectos[state.proyectoActivo];
-  const carpeta = proyecto.carpetas[state.carpetaActiva];
-  const elemento = carpeta.elementos[state.elementoActivo];
-  if (!elemento) return null;
+  const proyecto = state.proyectos?.[state.proyectoActivo];
+  const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
+  const elemento = carpeta?.elementos?.[state.elementoActivo];
+  if (!elemento) return <div className="empty-state">Selecciona o crea una estructura en la barra lateral para comenzar.</div>;
   const { formValues } = elemento;
   const { struct, activeTab, dxfStatus } = state;
 
