@@ -1,3 +1,4 @@
+// v2.3 deployment fix
 import { useEffect } from 'react';
 import { useInspection } from './context/InspectionContext.jsx';
 import Header from './components/Layout/Header.jsx';
