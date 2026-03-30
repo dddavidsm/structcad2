@@ -102,15 +102,46 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.fillText(`est=${cs}cm`,ox+cs*sc*.5,oy-8);
   ctx.fillText(`r=${cf}cm`,ox+(cs+cf)*sc*.5+4,oy-8);
 
-  // Barras cara frontal (top+bottom) — incluyen las 4 esquinas
+  // Barras cara frontal (LÍNEAS VERTICALES)
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
-  const bpFT=[], bpFB=[];
   for (let i=0;i<nbf;i++) {
-    bpFT.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:ox+(cf+i*spf)*sc,cy:oy+cl*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
-    bpFB.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:ox+(cf+i*spf)*sc,cy:oy+(d-cl)*sc,r:barR(df,sc),diam:df,type:'frontal-bottom'});
+    const bx=ox+(cf+i*spf)*sc;
+    barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+cl*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
+    ctx.beginPath();
+    ctx.moveTo(bx, oy+cf*sc);
+    ctx.lineTo(bx, oy+(d-cf)*sc);
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = lw;
+    ctx.stroke();
   }
-  bpFT.forEach(b=>barPositionsOut.push(b));
-  bpFB.forEach(b=>barPositionsOut.push(b));
+  // Barras laterales (LÍNEAS VERTICALES)
+  if (nbl>0) {
+    const spl=(d-2*cl)/(nbl+1);
+    for (let i=1;i<=nbl;i++) {
+      const by=oy+(cl+i*spl)*sc;
+      ctx.beginPath();
+      ctx.moveTo(ox+cf*sc, by);
+      ctx.lineTo(ox+(w-cf)*sc, by);
+      ctx.strokeStyle = '#222';
+      ctx.lineWidth = lw;
+      ctx.stroke();
+    }
+  }
+
+  // === ESTRIBOS (LÍNEAS HORIZONTALES REPETIDAS) ===
+  // Usar separación de estribos del formulario (cm)
+  const stirrupSpacing = p.stirrup_spacing || 15;
+  const usableHeight = d - 2*cf;
+  const nStirrups = Math.floor(usableHeight / stirrupSpacing) + 1;
+  for (let i=0; i<nStirrups; i++) {
+    const y = oy + cf*sc + i*stirrupSpacing*sc;
+    ctx.beginPath();
+    ctx.moveTo(ox+cf*sc, y);
+    ctx.lineTo(ox+(w-cf)*sc, y);
+    ctx.strokeStyle = '#0077cc'; // color azul para estribos
+    ctx.lineWidth = lw*0.8;
+    ctx.stroke();
+  }
 
   // Barras laterales: SOLO INTERMEDIAS (esquinas = barras de la cara frontal)
   if (nbl>0) {
@@ -297,6 +328,8 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
   const nbf=clamp(p.bars_front_count||5,2,16);
   const df=clamp(p.bars_front_diam||20,6,40);
   const ds=clamp(p.stirrup_diam||6,4,20);
+  const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,cf-ds/20),1,12);
+  const sps=clamp(p.stirrup_spacing||15,5,50); // separación de estribos en cm
   const VH=ih+70, marg=30;
   const M=40;
   const sc=Math.min((W-M*2)/w,(H-M*2)/VH);
@@ -318,13 +351,25 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
   dimH(ox,ox+w*sc,oy-20,`${w} cm`);
   dimV(oy+marg*sc,oy+(VH-marg)*sc,ox+w*sc+22,`${ih} cm`);
 
+  // Barras longitudinales como líneas verticales
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   for(let i=0;i<nbf;i++){
     const bx=ox+(cf+i*spf)*sc;
     barPositionsOut.push({id:`EV${i+1}`,label:`B${i+1}`,cx:bx,cy:oy+VH*sc*.5,r:barR(df,sc)*.7,diam:df,type:'elevation'});
-    ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1,ds/16*sc*.3); ctx.setLineDash([]);
+    ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.5,df/16*sc*.4); ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
+
+  // Estribos repetidos — arrancan en la base y suben con paso sps
+  const yTop=oy+marg*sc, yBot=oy+(VH-marg)*sc;
+  const ex1=ox+cs*sc, ex2=ox+(w-cs)*sc;
+  ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
+  for (let y=yBot, n=0; y>=yTop-0.5 && n<60; y-=sps*sc, n++) {
+    ctx.beginPath(); ctx.moveTo(ex1,y); ctx.lineTo(ex2,y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(`Sección  (${nbf} barras Ø${df}mm, est. @${sps}cm)`,ox+w*sc/2,oy+VH*sc+14);
 }
 
 // ── Pilar Rect — Vista Lateral ────────────────────────────────────
@@ -572,8 +617,14 @@ function getViews(struct) {
 
 export default function CanvasEditor() {
   const { state, dispatch, getParams } = useInspection();
-  const { struct, view, tool, brush, barStatus, cracks, annotations,
-          customStirrups, selectedBars } = state;
+  // Selección del elemento activo
+  const proyecto = state.proyectos[state.proyectoActivo];
+  const carpeta = proyecto.carpetas[state.carpetaActiva];
+  const elemento = carpeta.elementos[state.elementoActivo];
+  // Si no hay elemento, no renderizar
+  if (!elemento) return null;
+  const { formValues, barStatus, cracks, annotations, customStirrups, selectedBars } = elemento;
+  const { struct, view, tool, brush } = state;
 
   const cvRef         = useRef(null);
   const ctxRef        = useRef(null);

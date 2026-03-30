@@ -481,9 +481,14 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         bx = LX + cl + i*spl_int
         _L(msp,bx,LY+2,bx,LY+VH-2,"ARMADURA",lw=max(18,int(dl*5)))
 
-    # Estribos en zona de inspeccion
-    _L(msp,LX+cs,zt-2,LX+D-cs,zt-2,"ESTRIBOS",lw=25)
-    _L(msp,LX+cs,zb+2,LX+D-cs,zb+2,"ESTRIBOS",lw=25)
+    # Estribos en zona de inspeccion (REPETIDOS SEGÚN stirrup_spacing)
+    stirrup_spacing = getattr(data, 'stirrup_spacing', 15)
+    usable_height = zt - zb
+    n_stirrups = int(usable_height // stirrup_spacing) + 1
+    for i in range(n_stirrups):
+        y = zb + i*stirrup_spacing
+        if y > zt: break
+        _L(msp, LX+cs, y, LX+D-cs, y, "ESTRIBOS", lw=25)
 
     # Cotas
     _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)
@@ -522,8 +527,11 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         bx=FX+cf+i*spf
         _L(msp,bx,FY+2,bx,FY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
 
-    _L(msp,FX+cs,zt_f-2,FX+W-cs,zt_f-2,"ESTRIBOS",lw=25)
-    _L(msp,FX+cs,zb_f+2,FX+W-cs,zb_f+2,"ESTRIBOS",lw=25)
+    # Estribos en vista frontal (REPETIDOS SEGÚN stirrup_spacing)
+    for i in range(n_stirrups):
+        y = zb_f + i*stirrup_spacing
+        if y > zt_f: break
+        _L(msp, FX+cs, y, FX+W-cs, y, "ESTRIBOS", lw=25)
 
     # Cotas
     yf1=FY-10; yf2=FY-20

@@ -21,7 +21,12 @@ const TAB_LABELS = {
 
 export default function InspectionForm() {
   const { state, dispatch, setFormValue, getParams } = useInspection();
-  const { struct, activeTab, formValues, dxfStatus } = state;
+  const proyecto = state.proyectos[state.proyectoActivo];
+  const carpeta = proyecto.carpetas[state.carpetaActiva];
+  const elemento = carpeta.elementos[state.elementoActivo];
+  if (!elemento) return null;
+  const { formValues } = elemento;
+  const { struct, activeTab, dxfStatus } = state;
 
   const [exportMsg, setExportMsg] = useState(null);
 
@@ -98,6 +103,23 @@ export default function InspectionForm() {
                   onChange={v => setFormValue(field.id, v)}
                 />
               ))}
+                {/* Campo adicional para separación de estribos */}
+                {sec.s.toLowerCase().includes('armadura') && (
+                  <FormField
+                    key="stirrup_spacing"
+                    field={{
+                      id: 'stirrup_spacing',
+                      label: 'Separación de estribos (cm)',
+                      type: 'number',
+                      v: 15,
+                      min: 4,
+                      max: 50,
+                      step: 1
+                    }}
+                    value={formValues['stirrup_spacing'] !== undefined ? formValues['stirrup_spacing'] : 15}
+                    onChange={v => setFormValue('stirrup_spacing', v)}
+                  />
+                )}
             </div>
           </div>
         ))}

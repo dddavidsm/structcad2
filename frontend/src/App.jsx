@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { useInspection } from './context/InspectionContext.jsx';
 import Header from './components/Layout/Header.jsx';
+import ProjectSidebar from './components/Layout/ProjectSidebar.jsx';
+import ElementTabs from './components/Layout/ElementTabs.jsx';
 import StructureSelector from './components/StructureSelector.jsx';
 import CanvasEditor from './components/Canvas/CanvasEditor.jsx';
 import InspectionForm from './components/Forms/InspectionForm.jsx';
@@ -60,11 +62,17 @@ export default function App() {
             {step === 1 && <StructureSelector />}
             {step === 2 && (
               <div className="workspace">
-                <div className="workspace-canvas">
-                  <CanvasEditor />
-                </div>
-                <div className="workspace-form">
-                  <InspectionForm />
+                <ProjectSidebar />
+                <div className="workspace-main">
+                  <ElementTabs />
+                  <div className="workspace-content">
+                    <div className="workspace-canvas">
+                      <CanvasEditor />
+                    </div>
+                    <div className="workspace-form">
+                      <InspectionForm />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

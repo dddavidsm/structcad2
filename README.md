@@ -168,6 +168,7 @@ Documentación interactiva (Swagger): **http://localhost:8000/docs**
 2. Rellenar las pestañas: **Geometría → Armadura → Inspección → Obra**
 3. En el canvas, **pintar con la brocha naranja** las zonas picadas/inspeccionadas
 4. Marcar el estado de cada barra (encontrada / no encontrada / oxidada) haciendo clic
+5. El formulario de armaduras incluye ahora el campo "Separación de estribos (cm)", que controla la repetición de estribos en las vistas Frontal y Lateral.
 5. Añadir fisuras o anotaciones de texto si es necesario
 6. Pulsar **Generar DXF** — se descarga el plano `.dxf`
    - La zona blanca con trama en el DXF corresponde exactamente a lo pintado con la brocha
@@ -182,4 +183,7 @@ Documentación interactiva (Swagger): **http://localhost:8000/docs**
 | Puerto 8000 ocupado | Otro proceso | `uvicorn main:app --port 8001` |
 | Canvas en blanco | Estructura no seleccionada | Seleccionar estructura primero |
 | DXF no abre en AutoCAD | Formato R2000 | Abrir con LibreCAD para verificar |
+
+## Mejoras FASE 2 (2026-03)
+- Las vistas Frontal y Lateral ahora dibujan barras longitudinales como líneas verticales y estribos repetidos según la separación indicada en el formulario.
 | Historial vacío | Supabase no configurado | Ver sección "Configurar Supabase" |

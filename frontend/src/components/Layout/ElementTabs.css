@@ -1,0 +1,42 @@
+.element-tabs {
+  display: flex;
+  align-items: flex-end;
+  background: #f3f6fa;
+  border-bottom: 1px solid #e0e0e0;
+  padding: 0.2em 0.5em 0 0.5em;
+  min-height: 38px;
+}
+.tab {
+  padding: 0.5em 1.1em 0.4em 1.1em;
+  margin-right: 0.2em;
+  background: #e7eaf3;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 1em;
+  border: 1px solid #e0e0e0;
+  border-bottom: none;
+  transition: background 0.15s, font-weight 0.15s;
+}
+.tab.active {
+  background: #fff;
+  font-weight: bold;
+  border-bottom: 2px solid #3b82f6;
+}
+.tab:hover {
+  background: #dde6f7;
+}
+.tab-add-btn {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 6px 6px 0 0;
+  padding: 0.5em 1em 0.4em 1em;
+  font-size: 1.1em;
+  cursor: pointer;
+  margin-left: 0.5em;
+  margin-bottom: -1px;
+  transition: background 0.15s;
+}
+.tab-add-btn:hover {
+  background: #2563eb;
+}

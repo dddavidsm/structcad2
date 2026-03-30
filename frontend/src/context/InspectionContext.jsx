@@ -1,43 +1,35 @@
 import { createContext, useContext, useReducer, useCallback } from 'react';
 import { STRUCTS, getParamsFromValues } from '../config/structures.js';
 
-// ── Estado inicial ────────────────────────────────────────────────
+// ── Estado inicial NUEVO (jerárquico) ─────────────────────────────
+const genId = (prefix) => `${prefix}-${Math.random().toString(36).substr(2, 9)}`;
 
 const INITIAL = {
-  page:       'nueva',     // 'nueva' | 'historial'
-  step:       1,           // 1: selector estructura, 2: workspace
-  struct:     null,
-  view:       'section',   // 'section' | 'elevation' | 'lateral' | 'frontal'
-  tool:       'pick',      // 'pick' | 'erase' | 'crack' | 'annotate' | 'select-bar'
-  brush:      10,
-  activeTab:  'geometria',
-
-  // Datos live de la vista activa
-  barStatus:      {},   // {barId: 'unknown'|'found'|'notfound'|'oxidized'}
-  cracks:         [],
-  annotations:    [],
-  customStirrups: [],
-  selectedBars:   [],
-  pickedStrokes:  [],   // [{cx,cy,r}]
-  sectionBounds:  null, // {ox,oy,sw,sh}
-
-  // Cache de barras (reconstruido en cada redraw)
-  barPositions: [],
-
-  // Valores de formulario persistentes por estructura
-  formValues:  {},
-
-  // Datos por vista: { [view]: { pickedStrokes, cracks, annotations, customStirrups } }
-  viewData: {},
-
-  // Snapshots por estructura
-  structStates: {},
-
-  // Historial
-  history: [],
-
-  // Estado del boton DXF
-  dxfStatus: null,
+  proyectos: {
+    'proyecto-1': {
+      nombre: 'Proyecto sin título',
+      carpetas: {
+        'carpeta-1': {
+          nombre: 'Sótano 1',
+          elementos: {
+            'elemento-1': {
+              nombre: 'Pilar 1',
+              tipo: 'pilar_rect',
+              formValues: {},
+              barStatus: {},
+              pickedStrokes: [],
+              cracks: [],
+              annotations: [],
+              customStirrups: [],
+            }
+          }
+        }
+      }
+    }
+  },
+  proyectoActivo: 'proyecto-1',
+  carpetaActiva: 'carpeta-1',
+  elementoActivo: 'elemento-1',
 };
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -60,178 +52,112 @@ function _restoreView(vd) {
   };
 }
 
-// ── Reducer ───────────────────────────────────────────────────────
+// ── Reducer NUEVO (jerárquico e inmutable) ──────────────────────
+function deepClone(obj) {
+  return JSON.parse(JSON.stringify(obj));
+}
 
 function reducer(state, action) {
+  const { proyectoActivo, carpetaActiva, elementoActivo } = state;
+  const proyectos = state.proyectos;
+  const proyecto = proyectos[proyectoActivo];
+  const carpeta = proyecto.carpetas[carpetaActiva];
+  const elemento = carpeta.elementos[elementoActivo];
+
   switch (action.type) {
-
-    case 'NAV_PAGE':
-      return { ...state, page: action.payload };
-
-    case 'SET_STEP':
-      return { ...state, step: action.payload };
-
-    case 'SELECT_STRUCT': {
-      const prev = state.struct;
-      const next = action.payload;
-
-      // Flush live data para la vista activa
-      const currentViewData = {
-        ...state.viewData,
-        [state.view]: _cloneView(state),
-      };
-
-      // Guardar snapshot del struct actual
-      let structStates = state.structStates;
-      if (prev && prev !== next) {
-        structStates = {
-          ...structStates,
-          [prev]: {
-            barStatus:  { ...state.barStatus },
-            formValues: { ...state.formValues },
-            viewData:   currentViewData,
-          }
-        };
-      }
-
-      // Restaurar snapshot del struct siguiente
-      const saved = structStates[next];
-      const defaultValues = {};
-      if (STRUCTS[next]) {
-        for (const tabSecs of Object.values(STRUCTS[next].tabs)) {
-          for (const sec of tabSecs) {
-            for (const f of sec.f) {
-              defaultValues[f.id] = f.t === 'n' ? (f.v || 0) : (f.v || '');
-            }
-          }
-        }
-      }
-
-      const savedViewData = saved?.viewData || {};
-      const sectionData = savedViewData['section'] || {};
-
-      return {
-        ...state,
-        struct:       next,
-        view:         'section',
-        activeTab:    'geometria',
-        structStates,
-        viewData:     savedViewData,
-        barStatus:    saved ? { ...saved.barStatus } : {},
-        formValues:   saved ? { ...saved.formValues } : defaultValues,
-        ..._restoreView(sectionData),
-        selectedBars:  [],
-        sectionBounds: null,
-        barPositions:  [],
-        step:          2,
-      };
+    case 'SET_FORM_VALUE': {
+      const newElemento = { ...elemento, formValues: { ...elemento.formValues, [action.id]: action.value } };
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
     }
-
-    case 'SET_VIEW': {
-      const prevView = state.view;
-      const nextView = action.payload;
-      if (prevView === nextView) return state;
-
-      // Flush live data a la vista anterior
-      const viewData = {
-        ...state.viewData,
-        [prevView]: _cloneView(state),
-      };
-
-      // Restaurar datos de la nueva vista
-      const nv = viewData[nextView] || {};
-      return {
-        ...state,
-        view:    nextView,
-        viewData,
-        ..._restoreView(nv),
-        selectedBars:  [],
-        sectionBounds: null,
-        barPositions:  [],
-      };
+    case 'SET_BAR_STATUS': {
+      const newElemento = { ...elemento, barStatus: { ...elemento.barStatus, [action.barId]: action.status } };
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
     }
-
-    case 'SET_TOOL':
-      return { ...state, tool: action.payload };
-
-    case 'SET_BRUSH':
-      return { ...state, brush: action.payload };
-
-    case 'SET_TAB':
-      return { ...state, activeTab: action.payload };
-
-    case 'SET_FORM_VALUE':
-      return { ...state, formValues: { ...state.formValues, [action.id]: action.value } };
-
-    case 'SET_BAR_STATUS':
-      return { ...state, barStatus: { ...state.barStatus, [action.barId]: action.status } };
-
-    case 'SET_BAR_POSITIONS':
-      return { ...state, barPositions: action.payload };
-
-    case 'ADD_CRACK':
-      return { ...state, cracks: [...state.cracks, action.payload] };
-
-    case 'SET_CRACKS':
-      return { ...state, cracks: action.payload };
-
-    case 'ADD_ANNOTATION':
-      return { ...state, annotations: [...state.annotations, action.payload] };
-
-    case 'UPDATE_ANNOTATION':
-      return {
-        ...state,
-        annotations: state.annotations.map((a, i) =>
-          i === action.index ? { ...a, ...action.changes } : a
-        ),
+    case 'SET_PICKED_STROKES': {
+      const newElemento = { ...elemento, pickedStrokes: action.payload };
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
+    }
+    case 'SET_CRACKS': {
+      const newElemento = { ...elemento, cracks: action.payload };
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
+    }
+    case 'SET_ANNOTATIONS': {
+      const newElemento = { ...elemento, annotations: action.payload };
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
+    }
+    case 'SET_CUSTOM_STIRRUPS': {
+      const newElemento = { ...elemento, customStirrups: action.payload };
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
+    }
+    // Cambio de punteros activos
+    case 'SET_ELEMENTO_ACTIVO':
+      return { ...state, elementoActivo: action.payload };
+    case 'SET_CARPETA_ACTIVA':
+      return { ...state, carpetaActiva: action.payload, elementoActivo: Object.keys(proyecto.carpetas[action.payload].elementos)[0] };
+    // Crear nueva carpeta
+    case 'ADD_CARPETA': {
+      const newId = genId('carpeta');
+      const newCarpeta = { nombre: action.nombre, elementos: {} };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [newId]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto }, carpetaActiva: newId, elementoActivo: null };
+    }
+    // Crear nuevo elemento (clonación)
+    case 'ADD_ELEMENTO': {
+      const newId = genId('elemento');
+      // Clonación: copiar todo menos pickedStrokes, cracks, annotations
+      const base = action.baseElemento || elemento;
+      const newElemento = {
+        ...deepClone(base),
+        nombre: action.nombre,
+        pickedStrokes: [],
+        cracks: [],
+        annotations: [],
       };
-
-    case 'REMOVE_ANNOTATION':
-      return { ...state, annotations: state.annotations.filter((_, i) => i !== action.index) };
-
-    case 'SET_SELECTED_BARS':
-      return { ...state, selectedBars: action.payload };
-
-    case 'ADD_CUSTOM_STIRRUP':
-      return { ...state, customStirrups: [...state.customStirrups, action.payload] };
-
-    case 'CLEAR_CUSTOM_STIRRUPS':
-      return { ...state, customStirrups: [] };
-
-    case 'ADD_PICKED_STROKE':
-      return { ...state, pickedStrokes: [...state.pickedStrokes, action.payload] };
-
-    case 'SET_PICKED_STROKES':
-      return { ...state, pickedStrokes: action.payload };
-
-    case 'SET_SECTION_BOUNDS':
-      return { ...state, sectionBounds: action.payload };
-
-    case 'CLEAR_CANVAS':
-      return {
-        ...state,
-        pickedStrokes:  [],
-        cracks:         [],
-        annotations:    [],
-        customStirrups: [],
-        selectedBars:   [],
-      };
-
-    case 'ADD_HISTORY':
-      return { ...state, history: [action.payload, ...state.history] };
-
-    case 'SET_HISTORY':
-      return { ...state, history: action.payload };
-
-    case 'REMOVE_HISTORY':
-      return { ...state, history: state.history.filter(h => h.id !== action.id) };
-
-    case 'SET_DXF_STATUS':
-      return { ...state, dxfStatus: action.payload };
-
-    case 'RESET_ALL':
-      return { ...INITIAL };
-
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [newId]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto }, elementoActivo: newId };
+    }
+    // Renombrar carpeta o elemento
+    case 'RENAME_CARPETA': {
+      const newCarpeta = { ...carpeta, nombre: action.nombre };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
+    }
+    case 'RENAME_ELEMENTO': {
+      const newElemento = { ...elemento, nombre: action.nombre };
+      const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto } };
+    }
+    // Eliminar carpeta o elemento
+    case 'DELETE_CARPETA': {
+      const { [carpetaActiva]: omit, ...restCarpetas } = proyecto.carpetas;
+      const newProyecto = { ...proyecto, carpetas: restCarpetas };
+      // Seleccionar otra carpeta si existe
+      const nextCarpeta = Object.keys(restCarpetas)[0] || null;
+      const nextElemento = nextCarpeta ? Object.keys(restCarpetas[nextCarpeta].elementos)[0] : null;
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto }, carpetaActiva: nextCarpeta, elementoActivo: nextElemento };
+    }
+    case 'DELETE_ELEMENTO': {
+      const { [elementoActivo]: omit, ...restElementos } = carpeta.elementos;
+      const newCarpeta = { ...carpeta, elementos: restElementos };
+      const newProyecto = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: newCarpeta } };
+      // Seleccionar otro elemento si existe
+      const nextElemento = Object.keys(restElementos)[0] || null;
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto }, elementoActivo: nextElemento };
+    }
     default:
       return state;
   }
