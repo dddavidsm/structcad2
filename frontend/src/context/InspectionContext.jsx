@@ -41,6 +41,7 @@ const INITIAL = {
   dxfStatus:     null,
   sectionBounds: { ox: 0, oy: 0, sw: 1, sh: 1 },
   barPositions:  [],
+  history:       [],
 };
 // --- Añadir carpeta y elemento como objetos ---
 function addCarpeta(state, nombre) {
@@ -88,26 +89,6 @@ function addElemento(state, nombre) {
         }
       }
     }
-  };
-}
-
-// ── Helpers ───────────────────────────────────────────────────────
-
-function _cloneView(state) {
-  return {
-    pickedStrokes:  state.pickedStrokes.map(s => ({ ...s })),
-    cracks:         state.cracks.map(c => ({ ...c })),
-    annotations:    state.annotations.map(a => ({ ...a })),
-    customStirrups: state.customStirrups.map(s => ({ barIds: [...s.barIds] })),
-  };
-}
-
-function _restoreView(vd) {
-  return {
-    pickedStrokes:  (vd?.pickedStrokes  || []).map(s => ({ ...s })),
-    cracks:         (vd?.cracks         || []).map(c => ({ ...c })),
-    annotations:    (vd?.annotations    || []).map(a => ({ ...a })),
-    customStirrups: (vd?.customStirrups || []).map(s => ({ barIds: [...s.barIds] })),
   };
 }
 
@@ -229,7 +210,7 @@ function reducer(state, action) {
 
     // ── UI state ────────────────────────────────────────────────────
     case 'SELECT_STRUCT':
-      return { ...state, struct: action.payload, view: 'section' };
+      return { ...state, struct: action.payload, view: 'section', step: 2, page: 'nueva' };
     case 'SET_VIEW':
       return { ...state, view: action.payload };
     case 'SET_TOOL':
@@ -244,8 +225,16 @@ function reducer(state, action) {
       return { ...state, barPositions: action.payload };
     case 'SET_SECTION_BOUNDS':
       return { ...state, sectionBounds: action.payload };
-    case 'ADD_HISTORY':
-      return state; // El historial se persiste en Supabase; no en estado local
+    case 'ADD_HISTORY': {
+      const hist = Array.isArray(state.history) ? state.history : [];
+      return { ...state, history: [action.payload, ...hist] };
+    }
+    case 'SET_HISTORY':
+      return { ...state, history: Array.isArray(action.payload) ? action.payload : [] };
+    case 'REMOVE_HISTORY': {
+      const hist = Array.isArray(state.history) ? state.history : [];
+      return { ...state, history: hist.filter(r => r.id !== action.id) };
+    }
 
     // ── Mutaciones sobre el elemento activo ─────────────────────────
     case 'SET_SELECTED_BARS': {

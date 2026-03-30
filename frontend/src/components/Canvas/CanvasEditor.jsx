@@ -1212,8 +1212,8 @@ export default function CanvasEditor() {
       {/* Info */}
       <div className="cv-info">
         {struct} · {views.find(v=>v.id===view)?.label || view}
-        {state.pickedStrokes.length > 0 && (
-          <span className="cv-pick-count"> · {state.pickedStrokes.length} trazos pintados</span>
+        {pickedStrokes.length > 0 && (
+          <span className="cv-pick-count"> · {pickedStrokes.length} trazos pintados</span>
         )}
       </div>
     </div>
