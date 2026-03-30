@@ -51,6 +51,14 @@ export default function App() {
   // Pre-calentar el servidor Render en cuanto carga la app
   useEffect(() => { warmupServer(); }, []);
 
+  // DEBUG: log de estado central
+  const proyecto = state.proyectos?.[state.proyectoActivo];
+  const carpetas = proyecto?.carpetas || {};
+  const carpeta = carpetas[state.carpetaActiva];
+  const elementos = carpeta?.elementos || {};
+  const elementoActivo = elementos[state.elementoActivo];
+  console.log("🔥 DEBUG RENDER:", { page: state.page, step: state.step, hasActivo: !!elementoActivo });
+
   return (
     <div className="app-root">
       <Header />
@@ -60,40 +68,11 @@ export default function App() {
           <>
             <WorkspaceBack />
             {step === 1 && <StructureSelector />}
-            {step === 2 && (() => {
-              // Empty State global si no hay carpetas o elemento activo
-              const proyecto = state.proyectos?.[state.proyectoActivo];
-              const carpetas = proyecto?.carpetas || {};
-              const carpeta = carpetas[state.carpetaActiva];
-              const elementos = carpeta?.elementos || {};
-              const elemento = elementos[state.elementoActivo];
-              const noCarpetas = Object.keys(carpetas).length === 0;
-              const noElementos = Object.keys(elementos).length === 0;
-              if (noCarpetas || noElementos || !elemento) {
-                return (
-                  <div className="empty-state" style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%'}}>
-                    No hay ninguna estructura seleccionada.<br />
-                    Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.
-                  </div>
-                );
-              }
-              return (
-                <div className="workspace">
-                  <ProjectSidebar />
-                  <div className="workspace-main">
-                    <ElementTabs />
-                    <div className="workspace-content">
-                      <div className="workspace-canvas">
-                        <CanvasEditor />
-                      </div>
-                      <div className="workspace-form">
-                        <InspectionForm />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+            {step === 2 && (
+              <div style={{ border: '5px solid red', padding: '50px', backgroundColor: 'yellow', color: 'black', fontSize: '24px', width: '100%', minHeight: '300px' }}>
+                ZONA CENTRAL ACTIVA. Page: {state.page}, Step: {state.step}
+              </div>
+            )}
           </>
         )}
         {page === 'historial' && <InspectionHistory />}

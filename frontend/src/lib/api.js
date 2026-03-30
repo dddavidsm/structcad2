@@ -8,7 +8,15 @@ export function warmupServer() {
   const healthUrl = API_BASE
     ? `${API_BASE}/api/health`
     : 'https://structcad2-backend.onrender.com/api/health';
-  fetch(healthUrl).catch(() => {});
+  try {
+    fetch(healthUrl)
+      .then(() => {})
+      .catch((err) => {
+        console.warn('[warmupServer] Falló el health check:', err);
+      });
+  } catch (err) {
+    console.warn('[warmupServer] Excepción inesperada:', err);
+  }
 }
 
 /**
