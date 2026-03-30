@@ -8,6 +8,9 @@ export default function ProjectSidebar() {
   const carpetas = proyecto?.carpetas || {};
   const carpetaActiva = state.carpetaActiva;
 
+  // Debug: log estado de carpetas y carpeta activa
+  console.log("Estado UI Sidebar:", { carpetas, carpetaActiva });
+
   return (
     <aside className="project-sidebar">
       <div className="sidebar-title">Carpetas</div>

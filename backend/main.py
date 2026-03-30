@@ -23,12 +23,7 @@ app = FastAPI(title="StructCAD Pro API", version="2.1.0")
 # Con allow_origins=["*"] NO se puede usar allow_credentials=True.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://structcad2.vercel.app",
-        "https://structcad2-backend.onrender.com",
-    ],
+    allow_origins=["*"],  # TEMPORAL: Permitir cualquier origen para previews Vercel
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Accept"],
