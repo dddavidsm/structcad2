@@ -9,23 +9,19 @@ export const STRUCTS = {
       ]}],
       armadura: [
         { s: 'Cara frontal (sup./inf.)', f: [
-          { id: 'bars_front_count',  l: 'Nº barras',       u: 'ud', t: 'n', mn: 2,  mx: 16, st: 1,  v: 5  },
-          { id: 'bars_front_diam',   l: 'Ø barras',        u: 'mm', t: 'n', mn: 6,  mx: 40, st: 2,  v: 20 },
-          { id: 'cover_front',       l: 'Recubrimiento',   u: 'cm', t: 'n', mn: 1,  mx: 12, st: .5, v: 5  },
+          { id: 'bars_front_count',  l: 'Nº barras',            u: 'ud', t: 'n', mn: 2,  mx: 16, st: 1,  v: 5  },
+          { id: 'bars_front_diam',   l: 'Ø barras',             u: 'mm', t: 'n', mn: 6,  mx: 40, st: 2,  v: 20 },
+          { id: 'cover_front',       l: 'Recub. barras frente', u: 'cm', t: 'n', mn: 1,  mx: 12, st: .5, v: 5  },
         ]},
         { s: 'Cara lateral (izq./der.)', f: [
-          { id: 'bars_lateral_count', l: 'Nº barras',      u: 'ud', t: 'n', mn: 0,  mx: 16, st: 1,  v: 4  },
-          { id: 'bars_lateral_diam',  l: 'Ø barras',       u: 'mm', t: 'n', mn: 6,  mx: 40, st: 2,  v: 20 },
-          { id: 'cover_lateral',      l: 'Recubrimiento',  u: 'cm', t: 'n', mn: 1,  mx: 12, st: .5, v: 6  },
+          { id: 'bars_lateral_count', l: 'Nº barras (interm.)',  u: 'ud', t: 'n', mn: 0,  mx: 14, st: 1,  v: 4  },
+          { id: 'bars_lateral_diam',  l: 'Ø barras',             u: 'mm', t: 'n', mn: 6,  mx: 40, st: 2,  v: 20 },
+          { id: 'cover_lateral',      l: 'Recub. barras lat.',   u: 'cm', t: 'n', mn: 1,  mx: 12, st: .5, v: 6  },
         ]},
         { s: 'Estribo perimetral', f: [
-          { id: 'stirrup_diam',    l: 'Ø estribo',  u: 'mm', t: 'n', mn: 4, mx: 20, st: 2, v: 6  },
-          { id: 'stirrup_spacing', l: 'Separación', u: 'cm', t: 'n', mn: 5, mx: 50, st: 5, v: 15 },
-        ]},
-        { s: 'Ramas interiores', f: [
-          { id: 'inner_stirrups_x',   l: 'Ramas dir. X', u: 'ud', t: 'n', mn: 0, mx: 6, st: 1, v: 1 },
-          { id: 'inner_stirrups_y',   l: 'Ramas dir. Y', u: 'ud', t: 'n', mn: 0, mx: 6, st: 1, v: 0 },
-          { id: 'inner_stirrup_diam', l: 'Ø rama',       u: 'mm', t: 'n', mn: 4, mx: 16, st: 2, v: 6 },
+          { id: 'stirrup_diam',    l: 'Ø estribo',       u: 'mm', t: 'n', mn: 4, mx: 20, st: 2,  v: 6  },
+          { id: 'stirrup_spacing', l: 'Separación',      u: 'cm', t: 'n', mn: 5, mx: 50, st: 5,  v: 15 },
+          { id: 'cover_stirrup',   l: 'Recub. estribo',  u: 'cm', t: 'n', mn: 1, mx: 10, st: .5, v: 3  },
         ]},
       ],
       inspeccion: [{ s: 'Zona inspeccionada', f: [
@@ -59,12 +55,9 @@ export const STRUCTS = {
           { id: 'cover',       l: 'Recubrimiento', u: 'cm', t: 'n', mn: 1, mx: 12, st: .5, v: 4  },
         ]},
         { s: 'Cerco / Espiral', f: [
-          { id: 'stirrup_diam',    l: 'Ø espiral',  u: 'mm', t: 'n', mn: 4, mx: 20, st: 2, v: 8  },
-          { id: 'stirrup_spacing', l: 'Paso',       u: 'cm', t: 'n', mn: 5, mx: 30, st: 5, v: 10 },
-        ]},
-        { s: 'Ramas interiores', f: [
-          { id: 'inner_stirrups',     l: 'Nº ramas', u: 'ud', t: 'n', mn: 0, mx: 4, st: 1, v: 0 },
-          { id: 'inner_stirrup_diam', l: 'Ø rama',   u: 'mm', t: 'n', mn: 4, mx: 16, st: 2, v: 6 },
+          { id: 'stirrup_diam',    l: 'Ø espiral',      u: 'mm', t: 'n', mn: 4, mx: 20, st: 2,  v: 8  },
+          { id: 'stirrup_spacing', l: 'Paso',           u: 'cm', t: 'n', mn: 5, mx: 30, st: 5,  v: 10 },
+          { id: 'cover_stirrup',   l: 'Recub. estribo', u: 'cm', t: 'n', mn: 1, mx: 10, st: .5, v: 3  },
         ]},
       ],
       inspeccion: [{ s: 'Inspección', f: [
@@ -101,13 +94,10 @@ export const STRUCTS = {
           { id: 'bars_top_diam',  l: 'Ø barras',  u: 'mm', t: 'n', mn: 6, mx: 40, st: 2, v: 16 },
         ]},
         { s: 'Estribos', f: [
-          { id: 'cover',          l: 'Recubrimiento', u: 'cm', t: 'n', mn: 1, mx: 10, st: .5, v: 3  },
+          { id: 'cover',          l: 'Recub. barras', u: 'cm', t: 'n', mn: 1, mx: 10, st: .5, v: 3  },
           { id: 'stirrup_diam',   l: 'Ø estribo',     u: 'mm', t: 'n', mn: 4, mx: 20, st: 2,  v: 8  },
           { id: 'stirrup_spacing',l: 'Separación',    u: 'cm', t: 'n', mn: 5, mx: 50, st: 5,  v: 15 },
-        ]},
-        { s: 'Ramas interiores', f: [
-          { id: 'inner_stirrups',     l: 'Nº ramas vert.', u: 'ud', t: 'n', mn: 0, mx: 4, st: 1, v: 0 },
-          { id: 'inner_stirrup_diam', l: 'Ø rama',         u: 'mm', t: 'n', mn: 4, mx: 16, st: 2, v: 6 },
+          { id: 'cover_stirrup',  l: 'Recub. estribo',u: 'cm', t: 'n', mn: 1, mx: 10, st: .5, v: 3  },
         ]},
       ],
       inspeccion: [{ s: 'Inspección', f: [

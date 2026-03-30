@@ -59,9 +59,10 @@ class PillarRectData(InspectionBase):
     bars_front_count: int = Field(..., ge=2, le=16)
     bars_front_diam: float = Field(..., gt=0)
     cover_front: float = Field(..., gt=0)
-    bars_lateral_count: int = Field(..., ge=2, le=16)
+    bars_lateral_count: int = Field(..., ge=0, le=14)  # 0 = solo barras de esquina
     bars_lateral_diam: float = Field(..., gt=0)
     cover_lateral: float = Field(..., gt=0)
+    cover_stirrup: Optional[float] = None   # Recubrimiento hasta el estribo (nominal)
     stirrup_diam: float = Field(..., gt=0)
     stirrup_spacing: Optional[float] = 15
     inspection_height: float = Field(..., gt=0)

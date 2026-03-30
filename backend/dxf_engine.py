@@ -384,11 +384,16 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     dl  = float(data.bars_lateral_diam)
     ds  = float(data.stirrup_diam)
     ih  = float(data.inspection_height)
+    # cover_stirrup: recubrimiento nominal hasta el eje del estribo
+    # Si no viene del frontend, se calcula como min(cf,cl) - ds/20
+    _cs_raw = getattr(data, 'cover_stirrup', None)
+    cs = float(_cs_raw) if _cs_raw else max(1.5, min(cf, cl) - ds / 20)
 
-    spf = (W-2*cf)/(nbf-1) if nbf>1 else 0
-    spl = (D-2*cl)/(nbl-1) if nbl>1 else 0
-    rf  = max(.8,df/20)
-    rl  = max(.8,dl/20)
+    spf     = (W-2*cf)/(nbf-1) if nbf>1 else 0
+    # Barras laterales: solo INTERMEDIAS (esquinas compartidas con cara frontal)
+    spl_int = (D-2*cl)/(nbl+1) if nbl>0 else 0
+    rf  = max(.8, df/20)
+    rl  = max(.8, dl/20)
 
     doc,msp = _make_doc()
 
@@ -405,43 +410,43 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # Contorno exterior (encima de rellenos)
     _rect(msp,PX,PY,W,D,"SECCION",lw=70)
 
-    # Estribo perimetral
-    _stirrup(msp,PX+cf-ds/20,PY+cl-ds/20,
-             W-2*(cf-ds/20),D-2*(cl-ds/20),rc=1.0)
+    # Estribo perimetral: dibujado en cover_stirrup desde el borde
+    # El estribo "rodea" las barras (cs < cf, cs < cl)
+    _stirrup(msp, PX+cs, PY+cs, W-2*cs, D-2*cs, rc=1.0)
 
-    # Barras cara frontal (arriba y abajo)
+    # Barras cara frontal (arriba y abajo) — incluyen las 4 barras de esquina
     for i in range(nbf):
-        bx=PX+cf+i*spf
-        _fill_bar(msp,bx,PY+cf,rf)
-        _fill_bar(msp,bx,PY+D-cf,rf)
+        bx = PX + cf + i*spf
+        _fill_bar(msp, bx, PY+cl, rf)      # fila superior (y=cl)
+        _fill_bar(msp, bx, PY+D-cl, rf)    # fila inferior (y=D-cl)
 
-    # Barras cara lateral (izquierda y derecha)
-    for i in range(nbl):
-        by=PY+cl+i*spl
-        _fill_bar(msp,PX+cf,by,rl)
-        _fill_bar(msp,PX+W-cf,by,rl)
+    # Barras cara lateral: SOLO INTERMEDIAS (las esquinas ya estan en cara frontal)
+    for i in range(1, nbl+1):
+        by = PY + cl + i*spl_int
+        _fill_bar(msp, PX+cf,   by, rl)    # columna izquierda
+        _fill_bar(msp, PX+W-cf, by, rl)    # columna derecha
 
     # Cotas
     yc1=PY-10; yc2=PY-18
     _dim_h(msp,PX,PX+W,yc2,PY,f"{W:.0f}",ht=2.5)
-    _dim_h(msp,PX,PX+cf,yc1,PY,f"{cf:.0f}",ht=1.8)
+    _dim_h(msp,PX,PX+cf,yc1,PY,f"r={cf:.0f}",ht=1.8)
     if nbf>1 and spf>0:
-        _dim_h(msp,PX+cf,PX+cf+spf,yc1,PY,f"{spf:.0f}",ht=1.8)
-    _dim_h(msp,PX+W-cf,PX+W,yc1,PY,f"{cf:.0f}",ht=1.8)
+        _dim_h(msp,PX+cf,PX+cf+spf,yc1,PY,f"{spf:.1f}",ht=1.8)
+    _dim_h(msp,PX+W-cf,PX+W,yc1,PY,f"r={cf:.0f}",ht=1.8)
 
     xc1=PX+W+12; xc2=PX+W+20
     _dim_v(msp,PY,PY+D,xc2,PX+W,f"{D:.0f}",ht=2.5)
-    _dim_v(msp,PY,PY+cl,xc1,PX+W,f"{cl:.0f}",ht=1.8)
-    if nbl>1 and spl>0:
-        _dim_v(msp,PY+cl,PY+cl+spl,xc1,PX+W,f"{spl:.0f}",ht=1.8)
-    _dim_v(msp,PY+D-cl,PY+D,xc1,PX+W,f"{cl:.0f}",ht=1.8)
+    _dim_v(msp,PY,PY+cl,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
+    if nbl>0 and spl_int>0:
+        _dim_v(msp,PY+cl,PY+cl+spl_int,xc1,PX+W,f"{spl_int:.1f}",ht=1.8)
+    _dim_v(msp,PY+D-cl,PY+D,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
 
     _note(msp,PX+W*.65,PY+D*.7,
           PX+W+32,PY+D*.8,
-          [f"{nbf}Ø{df:.0f}mm cara frontal",
-           f"{nbl}Ø{dl:.0f}mm cara lateral",
-           f"Estribo Ø{ds:.0f}mm",
-           f"Recub. front.={cf:.0f}cm  lat.={cl:.0f}cm"])
+          [f"{nbf}O{df:.0f}mm cara frontal (+esquinas)",
+           f"{nbl}O{dl:.0f}mm cara lat. intermedias",
+           f"Estribo O{ds:.0f}mm",
+           f"Recub.est.={cs:.0f}cm  barras={cf:.0f}/{cl:.0f}cm"])
 
     _T(msp,PX-16,PY+D/2,2.5,"LATERAL","TEXTO",
        TextEntityAlignment.CENTER,90.0)
@@ -451,7 +456,6 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # ── 2. VISTA LATERAL ─────────────────────────────────────────
     # Pilar visto de lado: ancho=D, altura total VH
-    # Sin picado predefinido: hormigon intacto en toda la vista
     VH   = ih+80
     marg = 35  # zona de inspeccion (cm)
     LX   = -22.0
@@ -463,32 +467,41 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _fill_gray(msp,_rpts(LX,LY,D,VH))
     _rect(msp,LX,LY,D,VH,"SECCION",lw=70)
 
-    # Lineas de zona inspeccionada (sin trama de picado)
+    # Lineas de zona inspeccionada
     _L(msp,LX,zt,LX+D,zt,"COTAS",lw=13)
     _L(msp,LX,zb,LX+D,zb,"COTAS",lw=13)
 
-    # Barras longitudinales a lo largo de toda la vista
-    for i in range(nbl):
-        bx=LX+cl+i*spl
+    # Barras de ESQUINA (compartidas con la cara frontal), diametro df
+    # Se dibujan en los extremos (x=cl y x=D-cl)
+    _L(msp,LX+cl,   LY+2,LX+cl,   LY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
+    _L(msp,LX+D-cl, LY+2,LX+D-cl, LY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
+
+    # Barras laterales INTERMEDIAS (solo las nbl intermedias, no las esquinas)
+    for i in range(1, nbl+1):
+        bx = LX + cl + i*spl_int
         _L(msp,bx,LY+2,bx,LY+VH-2,"ARMADURA",lw=max(18,int(dl*5)))
 
     # Estribos en zona de inspeccion
-    _L(msp,LX+cl,zt-2,LX+D-cl,zt-2,"ESTRIBOS",lw=25)
-    _L(msp,LX+cl,zb+2,LX+D-cl,zb+2,"ESTRIBOS",lw=25)
+    _L(msp,LX+cs,zt-2,LX+D-cs,zt-2,"ESTRIBOS",lw=25)
+    _L(msp,LX+cs,zb+2,LX+D-cs,zb+2,"ESTRIBOS",lw=25)
 
     # Cotas
     _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)
     _dim_h(msp,LX,LX+cl,LY-18,LY,f"r={cl:.0f} cm",ht=1.8)
-    if nbl>1 and spl>0:
-        _dim_h(msp,LX+cl,LX+cl+spl,LY-26,LY,f"sep={spl:.0f} cm",ht=1.8)
+    if nbl>0 and spl_int>0:
+        _dim_h(msp,LX+cl,LX+cl+spl_int,LY-26,LY,f"sep={spl_int:.1f}",ht=1.8)
 
     xv=LX+D+12
     _dim_v(msp,LY,LY+VH,xv+8,LX+D,f"{VH:.0f} cm",ht=2.0)
     _dim_v(msp,zb,zt,xv,LX+D,f"insp={ih:.0f} cm",ht=2.0)
     _dim_v(msp,LY,LY+marg,xv+16,LX+D,f"{marg:.0f} cm",ht=1.8)
 
-    _note(msp,LX,(zt+zb)/2,LX-35,(zt+zb)/2+5,
-          [f"{nbl}Ø{dl:.0f}mm long.",f"Est. Ø{ds:.0f}mm",f"Recub. lat.={cl:.0f}cm"])
+    n_lat_total = nbl + 2  # intermedias + 2 esquinas
+    _note(msp,LX,(zt+zb)/2,LX-40,(zt+zb)/2+5,
+          [f"2O{df:.0f}mm esquina (compartidas)",
+           f"{nbl}O{dl:.0f}mm lat. interm.",
+           f"Total lat.: {n_lat_total} barras/cara",
+           f"Est. O{ds:.0f}mm  r.est.={cs:.0f}cm"])
     _title(msp,LX+D/2,LY-32,"VISTA LATERAL")
 
     # ── 3. VISTA FRONTAL ─────────────────────────────────────────
@@ -509,8 +522,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         bx=FX+cf+i*spf
         _L(msp,bx,FY+2,bx,FY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
 
-    _L(msp,FX+cf,zt_f-2,FX+W-cf,zt_f-2,"ESTRIBOS",lw=25)
-    _L(msp,FX+cf,zb_f+2,FX+W-cf,zb_f+2,"ESTRIBOS",lw=25)
+    _L(msp,FX+cs,zt_f-2,FX+W-cs,zt_f-2,"ESTRIBOS",lw=25)
+    _L(msp,FX+cs,zb_f+2,FX+W-cs,zb_f+2,"ESTRIBOS",lw=25)
 
     # Cotas
     yf1=FY-10; yf2=FY-20
@@ -525,7 +538,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     _note(msp,FX+W*.65,zt_f-ih*.3,
           FX+W+30,zt_f+5,
-          [f"{nbf}Ø{df:.0f}mm cara front.",f"Est. Ø{ds:.0f}mm",f"Recub. front.={cf:.0f}cm"])
+          [f"{nbf}O{df:.0f}mm cara front.",f"Est. O{ds:.0f}mm",
+           f"r.barras={cf:.0f}cm  r.estribo={cs:.0f}cm"])
     _title(msp,FX+W/2,FY-32,"VISTA FRONTAL")
 
     _cajetin(msp,FX+W+28,FY-55,_caj(data))
