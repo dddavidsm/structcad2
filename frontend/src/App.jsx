@@ -8,6 +8,7 @@ import CanvasEditor from './components/Canvas/CanvasEditor.jsx';
 import InspectionForm from './components/Forms/InspectionForm.jsx';
 import InspectionHistory from './components/History/InspectionHistory.jsx';
 import { warmupServer } from './lib/api.js';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import './App.css';
 
 function BottomNav() {
@@ -79,6 +80,7 @@ export default function App() {
       </main>
 
       <BottomNav />
+      <SpeedInsights />
     </div>
   );
 }
