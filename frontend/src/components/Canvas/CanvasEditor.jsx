@@ -63,37 +63,22 @@ function makeDraw(ctx) {
     ctx.arcTo(x,y,x+r,y,r); ctx.closePath();
   }
 
-  function drawInnerBranch(cx1,cy1,cx2,cy2,r1,r2,lineW) {
-    ctx.lineWidth=lineW; ctx.setLineDash([]);
-    const dx=cx2-cx1, dy=cy2-cy1, len=Math.sqrt(dx*dx+dy*dy);
-    if (len<1) return;
-    const tx=dx/len, ty=dy/len;
-    const hookR1=Math.max(3,r1+lineW*.5), hookR2=Math.max(3,r2+lineW*.5);
-    const sx=cx1+tx*hookR1, sy=cy1+ty*hookR1;
-    const ex=cx2-tx*hookR2, ey=cy2-ty*hookR2;
-    ctx.beginPath(); ctx.moveTo(sx,sy); ctx.lineTo(ex,ey); ctx.stroke();
-    const ang1=Math.atan2(cy1-sy,cx1-sx);
-    ctx.beginPath(); ctx.arc(cx1,cy1,hookR1,ang1,ang1+Math.PI,false); ctx.stroke();
-    const ang2=Math.atan2(cy2-ey,cx2-ex);
-    ctx.beginPath(); ctx.arc(cx2,cy2,hookR2,ang2,ang2+Math.PI,false); ctx.stroke();
-  }
-
-  return { fillConcrete, dimH, dimV, rrect, drawInnerBranch };
+  return { fillConcrete, dimH, dimV, rrect };
 }
 
 // ── Pilar Rectangular — Planta ────────────────────────────────────
 function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
-  const { fillConcrete, dimH, dimV, rrect, drawInnerBranch } = makeDraw(ctx);
+  const { fillConcrete, dimH, dimV, rrect } = makeDraw(ctx);
   const w=clamp(p.width||88,15,300), d=clamp(p.depth||68,15,300);
   const cf=clamp(p.cover_front||5,1,12), cl=clamp(p.cover_lateral||6,1,12);
+  const ds=clamp(p.stirrup_diam||6,4,20);
+  // Recubrimiento diferenciado: estribo vs barras
+  const csRaw = p.cover_stirrup != null ? p.cover_stirrup : null;
+  const cs = clamp(csRaw !== null ? csRaw : Math.max(1.5, Math.min(cf,cl) - ds/20), 1, 12);
   const nbf=clamp(p.bars_front_count||5,2,16);
   const nbl=Math.max(0,p.bars_lateral_count||0);
   const df=clamp(p.bars_front_diam||20,6,40);
   const dl=clamp(p.bars_lateral_diam||20,6,40);
-  const ds=clamp(p.stirrup_diam||6,4,20);
-  const nRX=Math.max(0,p.inner_stirrups_x||0);
-  const nRY=Math.max(0,p.inner_stirrups_y||0);
-  const dR=clamp(p.inner_stirrup_diam||6,4,16);
   const M=50;
   const sc=Math.min((W-M*2)/w,(H-M*2)/d);
   const ox=(W-w*sc)/2, oy=(H-d*sc)/2;
@@ -105,17 +90,19 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2.5; ctx.setLineDash([]);
   ctx.strokeRect(ox,oy,w*sc,d*sc);
 
+  // Estribo perimetral: dibujado en cover_stirrup — rodea visualmente las barras
   const lw=Math.max(1.2,ds/16*sc*.3);
   ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
-  const ex=ox+cf*sc, ey=oy+cl*sc, ew=w*sc-2*cf*sc, eh=d*sc-2*cl*sc;
-  rrect(ex,ey,ew,eh,2); ctx.stroke();
+  rrect(ox+cs*sc, oy+cs*sc, w*sc-2*cs*sc, d*sc-2*cs*sc, 2); ctx.stroke();
 
-  // Cotas con más separación
+  // Cotas
   dimH(ox,ox+w*sc,oy-22,`${w} cm`);
   dimV(oy,oy+d*sc,ox+w*sc+22,`${d} cm`);
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText(`r=${cf}cm`,ox+cf*sc/2,oy-8);
+  ctx.fillText(`est=${cs}cm`,ox+cs*sc*.5,oy-8);
+  ctx.fillText(`r=${cf}cm`,ox+(cs+cf)*sc*.5+4,oy-8);
 
+  // Barras cara frontal (top+bottom) — incluyen las 4 esquinas
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   const bpFT=[], bpFB=[];
   for (let i=0;i<nbf;i++) {
@@ -125,56 +112,26 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   bpFT.forEach(b=>barPositionsOut.push(b));
   bpFB.forEach(b=>barPositionsOut.push(b));
 
-  const bpLL=[], bpLR=[];
+  // Barras laterales: SOLO INTERMEDIAS (esquinas = barras de la cara frontal)
   if (nbl>0) {
     const spl=(d-2*cl)/(nbl+1);
     for (let i=1;i<=nbl;i++) {
       const by=oy+(cl+i*spl)*sc;
-      bpLL.push({id:`LL${i}`,label:`LL${i}`,cx:ox+cf*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
-      bpLR.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-cf)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
-    }
-    bpLL.forEach(b=>barPositionsOut.push(b));
-    bpLR.forEach(b=>barPositionsOut.push(b));
-  }
-
-  if (nRX>0) {
-    const innerLW=Math.max(1,dR/16*sc*.25);
-    ctx.strokeStyle='#6d28d9';
-    const stepX=ew/(nRX+1);
-    for (let i=1;i<=nRX;i++) {
-      const bx=ex+stepX*i;
-      let topBar=null,botBar=null,minT=Infinity,minB=Infinity;
-      bpFT.forEach(b=>{const d2=Math.abs(b.cx-bx);if(d2<minT){minT=d2;topBar=b;}});
-      bpFB.forEach(b=>{const d2=Math.abs(b.cx-bx);if(d2<minB){minB=d2;botBar=b;}});
-      if (topBar&&botBar) drawInnerBranch(bx,ey+topBar.r,bx,ey+eh-botBar.r,topBar.r,botBar.r,innerLW);
-      else { ctx.beginPath();ctx.moveTo(bx,ey);ctx.lineTo(bx,ey+eh);ctx.strokeStyle='#6d28d9';ctx.lineWidth=innerLW;ctx.stroke(); }
-    }
-  }
-  if (nRY>0) {
-    const innerLW=Math.max(1,dR/16*sc*.25);
-    ctx.strokeStyle='#6d28d9';
-    const stepY=eh/(nRY+1);
-    for (let i=1;i<=nRY;i++) {
-      const by=ey+stepY*i;
-      let leftBar=null,rightBar=null,minL=Infinity,minRr=Infinity;
-      bpLL.forEach(b=>{const d2=Math.abs(b.cy-by);if(d2<minL){minL=d2;leftBar=b;}});
-      bpLR.forEach(b=>{const d2=Math.abs(b.cy-by);if(d2<minRr){minRr=d2;rightBar=b;}});
-      if (leftBar&&rightBar) drawInnerBranch(ex+leftBar.r,by,ex+ew-rightBar.r,by,leftBar.r,rightBar.r,innerLW);
-      else { ctx.beginPath();ctx.moveTo(ex,by);ctx.lineTo(ex+ew,by);ctx.strokeStyle='#6d28d9';ctx.lineWidth=innerLW;ctx.stroke(); }
+      barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+cf*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
+      barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-cf)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
     }
   }
 }
 
 // ── Pilar Circular ────────────────────────────────────────────────
 function drawPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
-  const { fillConcrete, dimH, drawInnerBranch } = makeDraw(ctx);
+  const { fillConcrete, dimH } = makeDraw(ctx);
   const diam=clamp(p.diameter||50,20,300), R=diam/2;
   const cov=clamp(p.cover||4,1,12);
   const nb=clamp(p.bars_count||8,4,16);
   const db=clamp(p.bars_diam||20,6,40);
   const ds=clamp(p.stirrup_diam||8,4,20);
-  const nI=Math.max(0,p.inner_stirrups||0);
-  const dI=clamp(p.inner_stirrup_diam||6,4,16);
+  const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,cov-ds/20),1,10);
   const M=45;
   const sc=Math.min((W-M*2)/diam,(H-M*2)/diam);
   const cx2=W/2, cy2=H/2;
@@ -187,9 +144,10 @@ function drawPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   });
   ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2.5; ctx.setLineDash([]);
   ctx.beginPath(); ctx.arc(cx2,cy2,R*sc,0,Math.PI*2); ctx.stroke();
+  // Cerco en cover_stirrup (rodea las barras visualmente)
   ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.2,ds/16*sc*.3);
   ctx.setLineDash([4,3]);
-  ctx.beginPath(); ctx.arc(cx2,cy2,(R-cov)*sc,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx2,cy2,(R-cs)*sc,0,Math.PI*2); ctx.stroke();
   ctx.setLineDash([]);
   dimH(cx2-R*sc,cx2+R*sc,cy2+R*sc+18,`Ø${diam} cm`);
 
@@ -199,29 +157,11 @@ function drawPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     brs.push({id:`B${i+1}`,label:`B${i+1}`,cx:cx2+(R-cov)*sc*Math.cos(ang),cy:cy2+(R-cov)*sc*Math.sin(ang),r:barR(db,sc),diam:db,type:'radial'});
   }
   brs.forEach(b=>barPositionsOut.push(b));
-
-  if (nI>0) {
-    const innerLW=Math.max(1,dI/16*sc*.25);
-    ctx.strokeStyle='#6d28d9';
-    for (let i=0;i<nI;i++) {
-      const ang=Math.PI*i/nI;
-      const rr=(R-cov)*sc;
-      const p1x=cx2+rr*Math.cos(ang),p1y=cy2+rr*Math.sin(ang);
-      const p2x=cx2-rr*Math.cos(ang),p2y=cy2-rr*Math.sin(ang);
-      let b1=brs[0],b2=brs[0],d1=Infinity,d2=Infinity;
-      brs.forEach(b=>{
-        const dd1=(b.cx-p1x)**2+(b.cy-p1y)**2;
-        const dd2=(b.cx-p2x)**2+(b.cy-p2y)**2;
-        if(dd1<d1){d1=dd1;b1=b;} if(dd2<d2){d2=dd2;b2=b;}
-      });
-      drawInnerBranch(b1.cx,b1.cy,b2.cx,b2.cy,b1.r,b2.r,innerLW);
-    }
-  }
 }
 
 // ── Viga ─────────────────────────────────────────────────────────
 function drawViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
-  const { fillConcrete, dimH, dimV, rrect, drawInnerBranch } = makeDraw(ctx);
+  const { fillConcrete, dimH, dimV, rrect } = makeDraw(ctx);
   const w=clamp(p.width||30,15,150), h=clamp(p.height||60,20,300);
   const cov=clamp(p.cover||3,1,10);
   const nbb=clamp(p.bars_bottom_count||4,2,10);
@@ -229,8 +169,7 @@ function drawViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const dbb=clamp(p.bars_bottom_diam||20,6,40);
   const dbt=clamp(p.bars_top_diam||16,6,40);
   const ds=clamp(p.stirrup_diam||8,4,20);
-  const nI=Math.max(0,p.inner_stirrups||0);
-  const dI=clamp(p.inner_stirrup_diam||6,4,16);
+  const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,cov-ds/20),1,10);
   const M=45;
   const sc=Math.min((W-M*2)/w,(H-M*2)/h);
   const ox=(W-w*sc)/2, oy=(H-h*sc)/2;
@@ -241,33 +180,17 @@ function drawViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   fillConcrete(ox,oy,w*sc,h*sc);
   ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2.5; ctx.setLineDash([]);
   ctx.strokeRect(ox,oy,w*sc,h*sc);
+  // Estribo en cover_stirrup (rodea las barras)
   const lw=Math.max(1.2,ds/16*sc*.3);
   ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
-  rrect(ox+cov*sc,oy+cov*sc,w*sc-2*cov*sc,h*sc-2*cov*sc,2); ctx.stroke();
+  rrect(ox+cs*sc,oy+cs*sc,w*sc-2*cs*sc,h*sc-2*cs*sc,2); ctx.stroke();
   dimH(ox,ox+w*sc,oy-22,`${w} cm`);
   dimV(oy,oy+h*sc,ox+w*sc+22,`${h} cm`);
 
   const spb=nbb>1?(w-2*cov)/(nbb-1):0;
   const spt=nbt>1?(w-2*cov)/(nbt-1):0;
-  const bpB=[],bpT=[];
-  for(let i=0;i<nbb;i++) bpB.push({id:`BB${i+1}`,label:`BB${i+1}`,cx:ox+(cov+i*spb)*sc,cy:oy+(h-cov)*sc,r:barR(dbb,sc),diam:dbb,type:'bottom'});
-  for(let i=0;i<nbt;i++) bpT.push({id:`BT${i+1}`,label:`BT${i+1}`,cx:ox+(cov+i*spt)*sc,cy:oy+cov*sc,r:barR(dbt,sc),diam:dbt,type:'top'});
-  bpB.forEach(b=>barPositionsOut.push(b));
-  bpT.forEach(b=>barPositionsOut.push(b));
-
-  if (nI>0) {
-    const innerLW=Math.max(1,dI/16*sc*.25);
-    ctx.strokeStyle='#6d28d9';
-    const ex=ox+cov*sc, ey=oy+cov*sc, ew=w*sc-2*cov*sc, eh=h*sc-2*cov*sc;
-    const stepX=ew/(nI+1);
-    for(let i=1;i<=nI;i++){
-      const bx=ex+stepX*i;
-      let topB=null,botB=null,minT=Infinity,minBo=Infinity;
-      bpT.forEach(b=>{const d2=Math.abs(b.cx-bx);if(d2<minT){minT=d2;topB=b;}});
-      bpB.forEach(b=>{const d2=Math.abs(b.cx-bx);if(d2<minBo){minBo=d2;botB=b;}});
-      if(topB&&botB) drawInnerBranch(bx,ey+topB.r,bx,ey+eh-botB.r,topB.r,botB.r,innerLW);
-    }
-  }
+  for(let i=0;i<nbb;i++) barPositionsOut.push({id:`BB${i+1}`,label:`BB${i+1}`,cx:ox+(cov+i*spb)*sc,cy:oy+(h-cov)*sc,r:barR(dbb,sc),diam:dbb,type:'bottom'});
+  for(let i=0;i<nbt;i++) barPositionsOut.push({id:`BT${i+1}`,label:`BT${i+1}`,cx:ox+(cov+i*spt)*sc,cy:oy+cov*sc,r:barR(dbt,sc),diam:dbt,type:'top'});
 }
 
 // ── Forjado ───────────────────────────────────────────────────────
@@ -409,9 +332,12 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const { fillConcrete, dimH, dimV } = makeDraw(ctx);
   const d=clamp(p.depth||68,15,300);
   const cl=clamp(p.cover_lateral||6,1,12);
+  const cf=clamp(p.cover_front||5,1,12);   // para barras de esquina
   const nbl=Math.max(0,p.bars_lateral_count||0);
   const dl=clamp(p.bars_lateral_diam||20,6,40);
+  const df=clamp(p.bars_front_diam||20,6,40); // diámetro de las barras de esquina
   const ds=clamp(p.stirrup_diam||6,4,20);
+  const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,Math.min(cf,cl)-ds/20),1,12);
   const ih=clamp(p.inspection_height||25,5,150);
   const VH=ih+70, marg=30;
   const M=40;
@@ -434,18 +360,29 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
 
   const lw=Math.max(1,ds/16*sc*.3);
   ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
+
+  // Barras de ESQUINA (compartidas con la cara frontal)
+  const cornerMidY = oy+VH*sc*.5;
+  ctx.beginPath(); ctx.moveTo(ox+cl*sc,oy+marg*sc); ctx.lineTo(ox+cl*sc,oy+(VH-marg)*sc); ctx.stroke();
+  barPositionsOut.push({id:`CORNER_L`,label:`C`,cx:ox+cl*sc,cy:cornerMidY,r:barR(df,sc)*.7,diam:df,type:'lateral-corner'});
+  ctx.beginPath(); ctx.moveTo(ox+(d-cl)*sc,oy+marg*sc); ctx.lineTo(ox+(d-cl)*sc,oy+(VH-marg)*sc); ctx.stroke();
+  barPositionsOut.push({id:`CORNER_R`,label:`C`,cx:ox+(d-cl)*sc,cy:cornerMidY,r:barR(df,sc)*.7,diam:df,type:'lateral-corner'});
+
+  // Barras INTERMEDIAS (solo las nbl que introduce el usuario, sin esquinas)
   if (nbl>0) {
-    const spl=nbl>1?(d-2*cl)/(nbl-1):0;
-    for(let i=0;i<nbl;i++){
+    ctx.strokeStyle='#2563eb'; ctx.lineWidth=Math.max(1,dl/16*sc*.3);
+    const spl=(d-2*cl)/(nbl+1);
+    for(let i=1;i<=nbl;i++){
       const bx=ox+(cl+i*spl)*sc;
       ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
-      barPositionsOut.push({id:`LV${i+1}`,label:`L${i+1}`,cx:bx,cy:oy+VH*sc*.5,r:barR(dl,sc)*.7,diam:dl,type:'lateral-elev'});
+      barPositionsOut.push({id:`LV${i}`,label:`L${i}`,cx:bx,cy:cornerMidY,r:barR(dl,sc)*.7,diam:dl,type:'lateral-elev'});
     }
   }
-  // Estribos
+
+  // Estribos en cover_stirrup
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
-  ctx.beginPath(); ctx.moveTo(ox+cl*sc,oy+marg*sc); ctx.lineTo(ox+(d-cl)*sc,oy+marg*sc); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(ox+cl*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(d-cl)*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+marg*sc); ctx.lineTo(ox+(d-cs)*sc,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(d-cs)*sc,oy+(VH-marg)*sc); ctx.stroke();
   ctx.setLineDash([]);
 
   dimH(ox,ox+d*sc,oy-20,`${d} cm`);
@@ -453,7 +390,7 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   dimV(oy,oy+VH*sc,ox+d*sc+36,`${VH} cm`);
 
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText('Vista Lateral',ox+d*sc/2,oy+VH*sc+14);
+  ctx.fillText(`Vista Lateral  (2 esq.+${nbl} interm.)`,ox+d*sc/2,oy+VH*sc+14);
 }
 
 // ── Pilar Rect — Vista Frontal ────────────────────────────────────
@@ -464,6 +401,7 @@ function drawFrontalPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const nbf=clamp(p.bars_front_count||5,2,16);
   const df=clamp(p.bars_front_diam||20,6,40);
   const ds=clamp(p.stirrup_diam||6,4,20);
+  const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,cf-ds/20),1,12);
   const ih=clamp(p.inspection_height||25,5,150);
   const VH=ih+70, marg=30;
   const M=40;
@@ -494,8 +432,8 @@ function drawFrontalPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   }
   // Estribos
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
-  ctx.beginPath(); ctx.moveTo(ox+cf*sc,oy+marg*sc); ctx.lineTo(ox+(w-cf)*sc,oy+marg*sc); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(ox+cf*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(w-cf)*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+marg*sc); ctx.lineTo(ox+(w-cs)*sc,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(w-cs)*sc,oy+(VH-marg)*sc); ctx.stroke();
   ctx.setLineDash([]);
 
   dimH(ox,ox+w*sc,oy-20,`${w} cm`);
@@ -610,7 +548,6 @@ const STRUCT_VIEWS = {
     { id:'section',   label:'Planta'  },
     { id:'elevation', label:'Sección' },
     { id:'lateral',   label:'Lateral' },
-    { id:'frontal',   label:'Frontal' },
   ],
   'pilar-circ': [
     { id:'section',   label:'Planta'  },
@@ -648,6 +585,14 @@ export default function CanvasEditor() {
   const dragAnnRef    = useRef(null);
   const [cvSize, setCvSize] = useState({ W: 400, H: 328 });
 
+  // Zoom / Pan
+  const zoomRef        = useRef({ scale: 1, panX: 0, panY: 0 });
+  // Multi-touch tracking (pinch-to-zoom)
+  const pointerCacheRef = useRef([]);
+  const pinchInitRef    = useRef(null);
+  // Wheel handler ref (needed for passive:false addEventListener)
+  const wheelHandlerRef = useRef(null);
+
   // Inline annotation input
   const [annInput, setAnnInput] = useState(null); // {x,y,text,editIndex}
 
@@ -663,6 +608,27 @@ export default function CanvasEditor() {
     _resize();
     const ro = new ResizeObserver(_resize);
     ro.observe(cv.parentElement);
+
+    // Wheel zoom con passive:false para poder hacer preventDefault
+    wheelHandlerRef.current = (e) => {
+      e.preventDefault();
+      const rect = cv.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio||1, 3);
+      const mouseX = (e.clientX - rect.left) * (cv.width / rect.width / dpr);
+      const mouseY = (e.clientY - rect.top)  * (cv.height / rect.height / dpr);
+      const { scale, panX, panY } = zoomRef.current;
+      const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+      const newScale = Math.max(0.25, Math.min(8, scale * factor));
+      const ratio = newScale / scale;
+      zoomRef.current = {
+        scale: newScale,
+        panX: mouseX - (mouseX - panX) * ratio,
+        panY: mouseY - (mouseY - panY) * ratio,
+      };
+      fullRedraw();
+    };
+    cv.addEventListener('wheel', (e) => wheelHandlerRef.current?.(e), { passive: false });
+
     return () => ro.disconnect();
   }, []);
 
@@ -715,6 +681,12 @@ export default function CanvasEditor() {
     const bps = [];
     const sb  = { ox: 0, oy: 0, sw: 1, sh: 1 };
 
+    // Aplicar transformacion zoom/pan
+    const { scale, panX, panY } = zoomRef.current;
+    ctx.save();
+    ctx.translate(panX, panY);
+    ctx.scale(scale, scale);
+
     // Capa 1: estructura
     if (view === 'section') {
       const fn = {
@@ -745,11 +717,11 @@ export default function CanvasEditor() {
     dispatch({ type: 'SET_BAR_POSITIONS', payload: bps });
     dispatch({ type: 'SET_SECTION_BOUNDS', payload: { ...sb } });
 
-    // Capa 2: zona pintada
+    // Capa 2: zona pintada (offscreen canvas, dibujado en espacio de contenido)
     const pc = pickedZoneRef.current;
     if (pc && pc.width > 0) {
       ctx.save(); ctx.globalAlpha = 1;
-      ctx.drawImage(pc, 0, 0);
+      ctx.drawImage(pc, 0, 0, W, H); // W,H explicitos para escalar correctamente con zoom
       ctx.restore();
     }
 
@@ -764,18 +736,29 @@ export default function CanvasEditor() {
 
     // Capa 5: anotaciones
     drawAnnotations(ctx, annotations);
+
+    ctx.restore(); // restaura la transformacion zoom/pan
   }
 
   // ── Posicion en canvas ──────────────────────────────────────────
-  function _pos(e) {
+
+  /** Posicion en pixels CSS del canvas (espacio de pantalla sin zoom) */
+  function _rawPos(touchOrEvt) {
     const cv  = cvRef.current;
-    const dpr = Math.min(window.devicePixelRatio||1,3);
+    const dpr = Math.min(window.devicePixelRatio||1, 3);
     const rect = cv.getBoundingClientRect();
-    const touch = e.touches?.[0] || e;
     return {
-      x: (touch.clientX - rect.left) * (cv.width  / rect.width  / dpr),
-      y: (touch.clientY - rect.top)  * (cv.height / rect.height / dpr),
+      x: (touchOrEvt.clientX - rect.left) * (cv.width  / rect.width  / dpr),
+      y: (touchOrEvt.clientY - rect.top)  * (cv.height / rect.height / dpr),
     };
+  }
+
+  /** Posicion en espacio de contenido (aplicando la inversa del zoom/pan) */
+  function _pos(e) {
+    const touch = e.touches?.[0] || e;
+    const raw = _rawPos(touch);
+    const { scale, panX, panY } = zoomRef.current;
+    return { x: (raw.x - panX) / scale, y: (raw.y - panY) / scale };
   }
 
   function _hitBar(x, y) {
@@ -795,6 +778,23 @@ export default function CanvasEditor() {
   // ── Eventos ─────────────────────────────────────────────────────
   function handlePointerDown(e) {
     e.preventDefault();
+
+    // Registrar puntero en cache para detectar pellizco multi-tacto
+    const raw = _rawPos(e);
+    pointerCacheRef.current = [...pointerCacheRef.current.filter(p=>p.id!==e.pointerId),
+                               { id: e.pointerId, x: raw.x, y: raw.y }];
+
+    // Con 2 dedos: modo pellizco — no dibujar
+    if (pointerCacheRef.current.length === 2) {
+      const [p1, p2] = pointerCacheRef.current;
+      const d0 = Math.hypot(p2.x-p1.x, p2.y-p1.y);
+      const midX = (p1.x+p2.x)/2, midY = (p1.y+p2.y)/2;
+      const { scale, panX, panY } = zoomRef.current;
+      pinchInitRef.current = { scale, panX, panY, d0, midX, midY };
+      drawingRef.current = false;
+      return;
+    }
+
     const { x, y } = _pos(e);
 
     if (tool === 'annotate') {
@@ -842,6 +842,33 @@ export default function CanvasEditor() {
 
   function handlePointerMove(e) {
     e.preventDefault();
+
+    // Actualizar cache de punteros
+    const raw = _rawPos(e);
+    pointerCacheRef.current = pointerCacheRef.current.map(p =>
+      p.id === e.pointerId ? { ...p, x: raw.x, y: raw.y } : p
+    );
+
+    // Pellizco con 2 dedos: zoom + pan
+    if (pointerCacheRef.current.length === 2 && pinchInitRef.current) {
+      const [p1, p2] = pointerCacheRef.current;
+      const d1 = Math.hypot(p2.x-p1.x, p2.y-p1.y);
+      const midX = (p1.x+p2.x)/2, midY = (p1.y+p2.y)/2;
+      const init = pinchInitRef.current;
+      if (d1 > 0) {
+        const newScale = Math.max(0.25, Math.min(8, init.scale * (d1/init.d0)));
+        const ratio = newScale / init.scale;
+        const dMidX = midX - init.midX, dMidY = midY - init.midY;
+        zoomRef.current = {
+          scale: newScale,
+          panX: init.midX - (init.midX - init.panX) * ratio + dMidX,
+          panY: init.midY - (init.midY - init.panY) * ratio + dMidY,
+        };
+        fullRedraw();
+      }
+      return;
+    }
+
     if (!drawingRef.current) return;
     const { x, y } = _pos(e);
 
@@ -872,6 +899,10 @@ export default function CanvasEditor() {
   }
 
   function handlePointerUp(e) {
+    // Limpiar cache de punteros
+    pointerCacheRef.current = pointerCacheRef.current.filter(p => p.id !== e.pointerId);
+    if (pointerCacheRef.current.length < 2) pinchInitRef.current = null;
+
     if (!drawingRef.current && dragAnnRef.current === null) return;
 
     if (tool === 'crack' && crackPtsRef.current) {
@@ -1021,6 +1052,11 @@ export default function CanvasEditor() {
         <div className="cv-actions">
           <button className="cv-btn" onClick={handleUndo} title="Deshacer último trazo">↩ Deshacer</button>
           <button className="cv-btn danger" onClick={handleClear} title="Limpiar vista actual">✕ Limpiar</button>
+          <button
+            className="cv-btn"
+            title="Restablecer zoom (1:1)"
+            onClick={() => { zoomRef.current = { scale:1, panX:0, panY:0 }; fullRedraw(); }}
+          >⊡ 1:1</button>
         </div>
 
         {views.length > 1 && (
@@ -1040,11 +1076,12 @@ export default function CanvasEditor() {
       <div className="cv-wrap" id="cvCont">
         <canvas
           ref={cvRef}
-          style={{ cursor: cursorStyle, display:'block', width:'100%' }}
+          style={{ cursor: cursorStyle, display:'block', width:'100%', touchAction:'none' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
+          onPointerCancel={handlePointerUp}
           onContextMenu={e=>e.preventDefault()}
         />
 

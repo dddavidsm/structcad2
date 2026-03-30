@@ -23,9 +23,9 @@
 }
 
 .cv-tool-btn {
-  min-width: 54px;
-  height: 40px;
-  padding: 0 6px;
+  min-width: 56px;
+  height: 46px;       /* mayor área táctil */
+  padding: 0 8px;
   border: 1.5px solid #cbd5e1;
   border-radius: 6px;
   background: #fff;
@@ -90,7 +90,7 @@
 }
 
 .cv-btn {
-  padding: 4px 10px;
+  padding: 6px 12px;
   border-radius: 6px;
   border: 1.5px solid #cbd5e1;
   background: #fff;
@@ -99,6 +99,7 @@
   font-weight: 600;
   transition: background .15s;
   white-space: nowrap;
+  min-height: 36px;
 }
 .cv-btn:hover { background: #e2e8f0; }
 .cv-btn.danger { border-color: #fca5a5; color: #dc2626; }
