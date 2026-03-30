@@ -1,10 +1,10 @@
 import { STRUCTS, getParamsFromValues } from '../config/structures.js';
 
-const API_URL = 'https://structcad2-backend.onrender.com/api';
+export const API_URL = import.meta.env.VITE_API_URL || 'https://structcad2-backend.onrender.com';
 
 /** Precalienta el servidor Render con un ping silencioso al cargar la app */
 export function warmupServer() {
-  fetch(`${API_BASE}/api/health`)
+  fetch(`${API_URL}/api/health`)
     .then(() => {})
     .catch((err) => console.warn('[warmupServer] Falló el health check:', err));
 }
@@ -38,7 +38,7 @@ export async function exportDXF(state, onStatus) {
   );
 
   try {
-    const res = await fetch(`${API_URL}/generate/${struct}`, {
+    const res = await fetch(`${API_URL}/api/generate/${struct}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(p),
