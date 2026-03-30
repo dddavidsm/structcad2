@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './ProjectSidebar.css';
 import { useInspection } from '../../context/InspectionContext.jsx';
 
 export default function ProjectSidebar() {
   const { state, dispatch } = useInspection();
+
   const { paginas, paginaActiva } = state;
   const entries = Object.entries(paginas || {});
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState("");
 
   return (
     <aside className="project-sidebar">
@@ -16,8 +19,34 @@ export default function ProjectSidebar() {
             key={pid}
             className={pid === paginaActiva ? 'active' : ''}
             onClick={() => dispatch({ type: 'SET_PAGINA_ACTIVA', payload: pid })}
+            onDoubleClick={() => {
+              setEditingId(pid);
+              setEditValue(pag?.nombre || "");
+            }}
           >
-            <span>{pag?.nombre}</span>
+            {editingId === pid ? (
+              <input
+                type="text"
+                value={editValue}
+                autoFocus
+                onChange={e => setEditValue(e.target.value)}
+                onBlur={() => {
+                  dispatch({ type: 'RENAME_PAGINA', pid, nombre: editValue });
+                  setEditingId(null);
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    dispatch({ type: 'RENAME_PAGINA', pid, nombre: editValue });
+                    setEditingId(null);
+                  } else if (e.key === 'Escape') {
+                    setEditingId(null);
+                  }
+                }}
+                style={{ width: '90%' }}
+              />
+            ) : (
+              <span>{pag?.nombre}</span>
+            )}
             {entries.length > 1 && (
               <button
                 className="sidebar-delete-btn"
@@ -36,12 +65,9 @@ export default function ProjectSidebar() {
       </ul>
       <button
         className="sidebar-add-btn"
-        onClick={() => {
-          const nombre = prompt('Nombre del nuevo plano:');
-          if (nombre) dispatch({ type: 'ADD_PAGINA', nombre });
-        }}
+        onClick={() => dispatch({ type: 'SET_STEP', payload: 1 })}
       >
-        + Nuevo plano
+        + Nuevo Plano
       </button>
     </aside>
   );

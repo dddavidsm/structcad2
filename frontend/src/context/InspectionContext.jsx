@@ -41,8 +41,34 @@ function reducer(state, action) {
 
   switch (action.type) {
 
-    // ── Selección de estructura → crea primera página ─────────
+    // ── Selección de estructura ────────────────────────────────
     case 'SELECT_STRUCT': {
+      const existing = state.paginas || {};
+      const hasPages  = Object.keys(existing).length > 0;
+
+      // Si ya hay páginas Y el struct es el mismo → añadir nuevo plano
+      if (hasPages && state.struct === action.payload) {
+        const newId  = `pag-${Date.now()}`;
+        const newPag = {
+          nombre:        `Plano ${Object.keys(existing).length + 1}`,
+          formValues:    {},
+          barStatus:     {},
+          pickedStrokes: [],
+          cracks:        [],
+          annotations:   [],
+          customStirrups:[],
+        };
+        return {
+          ...state,
+          view:         'section',
+          step:         2,
+          page:         'nueva',
+          paginas:      { ...existing, [newId]: newPag },
+          paginaActiva: newId,
+        };
+      }
+
+      // Primera vez o struct diferente → resetear
       const pid = 'pag-1';
       const pagina = {
         nombre:        'Plano 1',
@@ -88,8 +114,17 @@ function reducer(state, action) {
         paginaActiva: newId,
       };
     }
-    case 'RENAME_PAGINA':
-      return updatePagina(state, { nombre: action.nombre });
+    case 'RENAME_PAGINA': {
+      const targetId = action.pid || state.paginaActiva;
+      if (!targetId || !state.paginas[targetId]) return state;
+      return {
+        ...state,
+        paginas: {
+          ...state.paginas,
+          [targetId]: { ...state.paginas[targetId], nombre: action.nombre },
+        },
+      };
+    }
     case 'DELETE_PAGINA': {
       const { [state.paginaActiva]: _omit, ...rest } = state.paginas;
       const nextId = Object.keys(rest)[0] || null;

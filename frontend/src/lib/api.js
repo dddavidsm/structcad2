@@ -1,6 +1,6 @@
 import { STRUCTS, getParamsFromValues } from '../config/structures.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'https://structcad2-backend.onrender.com';
+const API_URL = 'https://structcad2-backend.onrender.com/api';
 
 /** Precalienta el servidor Render con un ping silencioso al cargar la app */
 export function warmupServer() {
@@ -24,28 +24,21 @@ export async function exportDXF(state, onStatus) {
     return { ok: false };
   }
 
-  const def = STRUCTS[struct];
-  const p   = getParamsFromValues(struct, formValues);
-
-  // Enriquecer con datos de inspeccion del canvas
+  const p = getParamsFromValues(struct, formValues);
   p.markers     = (barPositions || []).map(b => ({ ...b, found: (barStatus || {})[b.id] || 'unknown' }));
   p.cracks_count = (cracks || []).length;
   p.annotations  = (annotations || []).map(a => ({ text: a.text, x: a.x, y: a.y }));
   p.view         = view;
-
-  // Circulos pintados normalizados → picado en el DXF
   p.picked_circles = _normalizeStrokes(pickedStrokes || [], sectionBounds);
 
   onStatus('spin', 'Conectando con el servidor…');
-
-  // Si el servidor está arrancando (Render free tier), avisa al usuario tras 8 s
   const coldStartTimer = setTimeout(
     () => onStatus('spin', 'Iniciando servidor… puede tardar ~1 min la primera vez'),
     8000,
   );
 
   try {
-    const res = await fetch(`${API_BASE}${def.endpoint}`, {
+    const res = await fetch(`${API_URL}/generate/${struct}`, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify(p),

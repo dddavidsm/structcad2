@@ -4,6 +4,7 @@
  */
 import { useRef, useEffect, useCallback, useState } from 'react';
 import { useInspection } from '../../context/InspectionContext.jsx';
+import ViewSelector3D from './ViewSelector3D.jsx';
 import './CanvasEditor.css';
 
 const FONT = "'Inter',system-ui,sans-serif";
@@ -329,7 +330,8 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
   const df=clamp(p.bars_front_diam||20,6,40);
   const ds=clamp(p.stirrup_diam||6,4,20);
   const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,cf-ds/20),1,12);
-  const sps=clamp(p.stirrup_spacing||15,5,50); // separación de estribos en cm
+  const sps=clamp(p.stirrup_spacing||15,5,50);
+  const estABarra=clamp(p.estriboABarra||0,0,10); // recubrimiento estribo a barra (cm)
   const VH=ih+70, marg=30;
   const M=40;
   const sc=Math.min((W-M*2)/w,(H-M*2)/VH);
@@ -361,15 +363,16 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
   }
 
   // Estribos repetidos — arrancan en la base y suben con paso sps
+  // estABarra reduce el ancho del estribo visual a ambos lados
   const yTop=oy+marg*sc, yBot=oy+(VH-marg)*sc;
-  const ex1=ox+cs*sc, ex2=ox+(w-cs)*sc;
+  const ex1=ox+cs*sc+estABarra*sc, ex2=ox+(w-cs)*sc-estABarra*sc;
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
   for (let y=yBot, n=0; y>=yTop-0.5 && n<60; y-=sps*sc, n++) {
     ctx.beginPath(); ctx.moveTo(ex1,y); ctx.lineTo(ex2,y); ctx.stroke();
   }
   ctx.setLineDash([]);
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText(`Sección  (${nbf} barras Ø${df}mm, est. @${sps}cm)`,ox+w*sc/2,oy+VH*sc+14);
+  ctx.fillText(`Sección  (${nbf}Ø${df}mm, est@${sps}cm${estABarra?', e-b='+estABarra+'cm':''})`,ox+w*sc/2,oy+VH*sc+14);
 }
 
 // ── Pilar Rect — Vista Lateral ────────────────────────────────────
@@ -383,6 +386,7 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const df=clamp(p.bars_front_diam||20,6,40); // diámetro de las barras de esquina
   const ds=clamp(p.stirrup_diam||6,4,20);
   const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,Math.min(cf,cl)-ds/20),1,12);
+  const estABarra=clamp(p.estriboABarra||0,0,10); // recubrimiento estribo a barra (cm)
   const ih=clamp(p.inspection_height||25,5,150);
   const VH=ih+70, marg=30;
   const M=40;
@@ -427,7 +431,7 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   // Estribos repetidos a intervalos sps (igual que en alzado frontal)
   const sps = clamp(p.stirrup_spacing||15,5,50);
   const yTop = oy+marg*sc, yBot = oy+(VH-marg)*sc;
-  const ex1 = ox+cs*sc, ex2 = ox+(d-cs)*sc;
+  const ex1 = ox+cs*sc+estABarra*sc, ex2 = ox+(d-cs)*sc-estABarra*sc;
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
   for (let y=yBot, n=0; y>=yTop-0.5 && n<60; y-=sps*sc, n++) {
     ctx.beginPath(); ctx.moveTo(ex1,y); ctx.lineTo(ex2,y); ctx.stroke();
@@ -439,7 +443,7 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   dimV(oy,oy+VH*sc,ox+d*sc+36,`${VH} cm`);
 
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText(`Vista Lateral  (2 esq.+${nbl} interm., est. @${sps}cm)`,ox+d*sc/2,oy+VH*sc+14);
+  ctx.fillText(`Vista Lateral  (2 esq.+${nbl} interm., est@${sps}cm${estABarra?', e-b='+estABarra+'cm':''})`,ox+d*sc/2,oy+VH*sc+14);
 }
 
 // ── Pilar Rect — Vista Frontal ────────────────────────────────────
@@ -883,13 +887,24 @@ export default function CanvasEditor() {
 
     const { x, y } = _pos(e);
 
+    // RESTRICCIÓN: bloquear herramientas de barras/estribos en vistas lateral/section de elevación
+    const isElevView = view === 'lateral' || view === 'frontal';
+    if (isElevView && (tool === 'select-bar')) return;
+
     if (tool === 'annotate') {
       const idx = _hitAnnotation(x, y);
       if (idx >= 0) {
-        dragAnnRef.current = idx;
-        drawingRef.current = true;
+        // Nota editable: doble propósito — prompt para editar texto al hacer clic en nota existente
+        const newText = window.prompt('Editar nota:', annotations[idx]?.text || '');
+        if (newText !== null) {
+          dispatch({ type: 'UPDATE_ANNOTATION', index: idx, changes: { text: newText.trim() } });
+        } else {
+          // Si cancela el prompt, arrastrar la nota
+          dragAnnRef.current = idx;
+          drawingRef.current = true;
+        }
       } else {
-        // Mostrar input inline
+        // Mostrar input inline para nueva nota
         setAnnInput({ x, y, text: '', editIndex: -1 });
       }
       return;
@@ -1146,14 +1161,20 @@ export default function CanvasEditor() {
         </div>
 
         {views.length > 1 && (
-          <div className="cv-view-toggle">
-            {views.map(v => (
-              <button
-                key={v.id}
-                className={`cv-view-btn ${view===v.id?'active':''}`}
-                onClick={() => dispatch({ type:'SET_VIEW', payload:v.id })}
-              >{v.label}</button>
-            ))}
+          <div className="cv-view-toggle" style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+            <ViewSelector3D
+              view={view}
+              onChangeView={v => dispatch({ type:'SET_VIEW', payload:v })}
+            />
+            <div style={{ display:'flex', flexDirection:'column', gap:'3px' }}>
+              {views.map(v => (
+                <button
+                  key={v.id}
+                  className={`cv-view-btn ${view===v.id?'active':''}`}
+                  onClick={() => dispatch({ type:'SET_VIEW', payload:v.id })}
+                >{v.label}</button>
+              ))}
+            </div>
           </div>
         )}
       </div>

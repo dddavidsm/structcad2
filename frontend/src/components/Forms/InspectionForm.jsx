@@ -78,6 +78,17 @@ export default function InspectionForm() {
   return (
     <div className="form-panel">
       {/* Titulo */}
+      <div className="form-group">
+        <label htmlFor="estriboABarra">Recubrimiento estribo a barra (cm)</label>
+        <input
+          id="estriboABarra"
+          type="number"
+          min="0"
+          step="0.1"
+          value={formValues.estriboABarra || ''}
+          onChange={e => setFormValue('estriboABarra', parseFloat(e.target.value) || 0)}
+        />
+      </div>
       <div className="form-header">
         <span className="form-title">{def.label}</span>
       </div>
