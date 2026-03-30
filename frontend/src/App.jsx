@@ -70,7 +70,15 @@ export default function App() {
             {step === 1 && <StructureSelector />}
             {step === 2 && (
               <div className="flex-1 flex overflow-hidden">
-                {(!state.proyectos || !state.proyectoActivo || !state.carpetaActiva || !state.elementoActivo) ? (
+                {(
+                  !state.proyectos ||
+                  !state.proyectoActivo ||
+                  !state.carpetaActiva ||
+                  !state.elementoActivo ||
+                  Object.keys(state.proyectos || {}).length === 0 ||
+                  Object.keys(state.proyectos?.[state.proyectoActivo]?.carpetas || {}).length === 0 ||
+                  Object.keys(state.proyectos?.[state.proyectoActivo]?.carpetas?.[state.carpetaActiva]?.elementos || {}).length === 0
+                ) ? (
                   <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
                     <h2>No hay estructura seleccionada</h2>
                     <p>Por favor, crea un proyecto o elemento para comenzar.</p>
