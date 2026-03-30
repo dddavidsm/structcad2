@@ -8,20 +8,17 @@ export default function ProjectSidebar() {
   const carpetas = proyecto?.carpetas || {};
   const carpetaActiva = state.carpetaActiva;
 
-  // Debug: log estado de carpetas y carpeta activa
-  console.log("Estado UI Sidebar:", { carpetas, carpetaActiva });
-
   return (
     <aside className="project-sidebar">
       <div className="sidebar-title">Carpetas</div>
       <ul className="sidebar-list">
-        {Object.entries(carpetas).map(([cid, carpeta]) => (
+        {Object.entries(carpetas ?? {}).map(([cid, carpeta]) => (
           <li
             key={cid}
             className={cid === carpetaActiva ? 'active' : ''}
             onClick={() => dispatch({ type: 'SET_CARPETA_ACTIVA', payload: cid })}
           >
-            <span>{carpeta.nombre}</span>
+            <span>{carpeta?.nombre}</span>
             {/* Botón eliminar/renombrar aquí si se desea */}
           </li>
         ))}

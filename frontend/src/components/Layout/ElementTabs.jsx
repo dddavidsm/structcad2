@@ -9,18 +9,15 @@ export default function ElementTabs() {
   const elementos = carpeta?.elementos || {};
   const elementoActivo = state.elementoActivo;
 
-  // Debug: log estado de elementos y elemento activo
-  console.log("Estado UI Tabs:", { elementos, elementoActivo });
-
   return (
     <div className="element-tabs">
-      {Object.entries(elementos).map(([eid, elemento]) => (
+      {Object.entries(elementos ?? {}).map(([eid, elemento]) => (
         <div
           key={eid}
           className={`tab ${eid === elementoActivo ? 'active' : ''}`}
           onClick={() => dispatch({ type: 'SET_ELEMENTO_ACTIVO', payload: eid })}
         >
-          {elemento.nombre}
+          {elemento?.nombre}
         </div>
       ))}
       <button

@@ -69,8 +69,28 @@ export default function App() {
             <WorkspaceBack />
             {step === 1 && <StructureSelector />}
             {step === 2 && (
-              <div style={{ border: '5px solid red', padding: '50px', backgroundColor: 'yellow', color: 'black', fontSize: '24px', width: '100%', minHeight: '300px' }}>
-                ZONA CENTRAL ACTIVA. Page: {state.page}, Step: {state.step}
+              <div className="flex-1 flex overflow-hidden">
+                {(!state.proyectos || !state.proyectoActivo || !state.carpetaActiva || !state.elementoActivo) ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
+                    <h2>No hay estructura seleccionada</h2>
+                    <p>Por favor, crea un proyecto o elemento para comenzar.</p>
+                  </div>
+                ) : (
+                  <div className="workspace">
+                    <ProjectSidebar />
+                    <div className="workspace-main">
+                      <ElementTabs />
+                      <div className="workspace-content">
+                        <div className="workspace-canvas">
+                          <CanvasEditor />
+                        </div>
+                        <div className="workspace-form">
+                          <InspectionForm />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </>
