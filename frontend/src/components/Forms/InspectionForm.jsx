@@ -24,7 +24,7 @@ export default function InspectionForm() {
   const proyecto = state.proyectos?.[state.proyectoActivo];
   const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
   const elemento = carpeta?.elementos?.[state.elementoActivo];
-  if (!elemento) return <div className="empty-state">Selecciona o crea una estructura en la barra lateral para comenzar.</div>;
+  if (!elemento) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
   const { formValues } = elemento;
   const { struct, activeTab, dxfStatus } = state;
 
