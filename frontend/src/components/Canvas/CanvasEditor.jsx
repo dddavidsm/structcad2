@@ -622,15 +622,14 @@ export default function CanvasEditor() {
   const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
   const elemento = carpeta?.elementos?.[state.elementoActivo];
   if (!elemento) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
-  const { 
-    formValues = {},
-    barStatus = {},
-    cracks = [],
-    annotations = [],
-    customStirrups = [],
-    selectedBars = [],
-    pickedStrokes = [],
-  } = elemento;
+  // Saneamiento: asegurar arrays/objetos
+  const formValues = elemento?.formValues || {};
+  const barStatus = elemento?.barStatus || {};
+  const cracks = Array.isArray(elemento?.cracks) ? elemento.cracks : Object.values(elemento?.cracks || {});
+  const annotations = Array.isArray(elemento?.annotations) ? elemento.annotations : Object.values(elemento?.annotations || {});
+  const customStirrups = Array.isArray(elemento?.customStirrups) ? elemento.customStirrups : Object.values(elemento?.customStirrups || {});
+  const selectedBars = Array.isArray(elemento?.selectedBars) ? elemento.selectedBars : Object.values(elemento?.selectedBars || {});
+  const pickedStrokes = Array.isArray(elemento?.pickedStrokes) ? elemento.pickedStrokes : Object.values(elemento?.pickedStrokes || {});
   const { struct, view, tool, brush } = state;
 
   const cvRef         = useRef(null);

@@ -52,13 +52,7 @@ export default function App() {
   // Pre-calentar el servidor Render en cuanto carga la app
   useEffect(() => { warmupServer(); }, []);
 
-  // DEBUG: log de estado central
-  const proyecto = state.proyectos?.[state.proyectoActivo];
-  const carpetas = proyecto?.carpetas || {};
-  const carpeta = carpetas[state.carpetaActiva];
-  const elementos = carpeta?.elementos || {};
-  const elementoActivo = elementos[state.elementoActivo];
-  console.log("🔥 DEBUG RENDER:", { page: state.page, step: state.step, hasActivo: !!elementoActivo });
+
 
   return (
     <div className="app-root">
