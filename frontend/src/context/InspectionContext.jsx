@@ -30,6 +30,8 @@ const INITIAL = {
   proyectoActivo: 'proyecto-1',
   carpetaActiva: 'carpeta-1',
   elementoActivo: 'elemento-1',
+  page: 'nueva', // Añadido para navegación
+  step: 2,       // Añadido para navegación
 };
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -158,6 +160,10 @@ function reducer(state, action) {
       const nextElemento = Object.keys(restElementos)[0] || null;
       return { ...state, proyectos: { ...proyectos, [proyectoActivo]: newProyecto }, elementoActivo: nextElemento };
     }
+    case 'NAV_PAGE':
+      return { ...state, page: action.payload };
+    case 'SET_STEP':
+      return { ...state, step: action.payload };
     default:
       return state;
   }
