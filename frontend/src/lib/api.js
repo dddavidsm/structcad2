@@ -4,7 +4,11 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 
 /** Precalienta el servidor Render con un ping silencioso al cargar la app */
 export function warmupServer() {
-  fetch(`${API_BASE}/api/health`).catch(() => {});
+  // Si API_BASE está vacío (Vercel), usar la ruta absoluta del backend Render
+  const healthUrl = API_BASE
+    ? `${API_BASE}/api/health`
+    : 'https://structcad2-backend.onrender.com/api/health';
+  fetch(healthUrl).catch(() => {});
 }
 
 /**
