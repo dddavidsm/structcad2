@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useInspection } from '../../context/InspectionContext.jsx';
 import { STRUCTS } from '../../config/structures.js';
 import { exportDXF } from '../../lib/api.js';
@@ -125,6 +125,19 @@ export default function InspectionForm() {
 function FormField({ field, value, onChange }) {
   const { id, l, u, t, mn, mx, st, opts } = field;
 
+  // Estado local para inputs numéricos: permite vaciar y escribir sin fricción
+  const [numRaw, setNumRaw] = useState(() =>
+    t === 'n' ? String(value ?? field.v ?? '') : ''
+  );
+  const isFocused = useRef(false);
+
+  // Sincronizar cuando el valor externo cambia y el input no está activo
+  useEffect(() => {
+    if (t === 'n' && !isFocused.current) {
+      setNumRaw(String(value ?? field.v ?? ''));
+    }
+  }, [value, field.v, t]);
+
   const label = (
     <label className="field-label" htmlFor={id}>
       {l}{u ? <span className="field-unit">{u}</span> : null}
@@ -138,8 +151,20 @@ function FormField({ field, value, onChange }) {
         <input
           id={id} type="number"
           min={mn} max={mx} step={st}
-          value={value ?? field.v}
-          onChange={e => onChange(parseFloat(e.target.value) || 0)}
+          value={numRaw}
+          onFocus={e => { isFocused.current = true; e.target.select(); }}
+          onChange={e => setNumRaw(e.target.value)}
+          onBlur={() => {
+            isFocused.current = false;
+            const v = parseFloat(numRaw);
+            if (!isNaN(v)) {
+              onChange(v);
+              setNumRaw(String(v));
+            } else {
+              // Revertir al valor actual si el campo queda inválido
+              setNumRaw(String(value ?? field.v ?? ''));
+            }
+          }}
           className="field-input"
         />
       </div>

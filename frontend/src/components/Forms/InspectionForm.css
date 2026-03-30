@@ -28,7 +28,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 8px 12px;
+  padding: 10px 14px;   /* más alto para tacto */
   border: none;
   background: transparent;
   cursor: pointer;
@@ -38,6 +38,7 @@
   white-space: nowrap;
   border-bottom: 2px solid transparent;
   transition: color .15s, border-color .15s;
+  min-height: 44px;     /* mínimo táctil recomendado */
 }
 .tab-btn:hover { color: #334155; }
 .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
@@ -47,40 +48,46 @@
 .tab-content {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;          /* más separación entre secciones */
 }
 
-.form-section {}
+.form-section {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafbfc;
+}
 .form-section-title {
   font-size: 11px;
   font-weight: 700;
   color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: .05em;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .form-fields {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;           /* más espacio para evitar toques accidentales */
 }
 
 .field-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-height: 40px;   /* target táctil mínimo */
 }
 .field-col {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 .field-label {
   flex: 1;
-  font-size: 12px;
+  font-size: 13px;    /* más legible en tablet */
   color: #475569;
   display: flex;
   align-items: center;
@@ -91,50 +98,54 @@
   font-size: 10px;
   color: #94a3b8;
   background: #f1f5f9;
-  padding: 1px 4px;
+  padding: 1px 5px;
   border-radius: 3px;
+  white-space: nowrap;
 }
 .field-input {
-  width: 100px;
-  padding: 4px 8px;
+  width: 110px;
+  padding: 7px 10px;  /* más alto para tacto */
   border: 1.5px solid #e2e8f0;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: #1e293b;
   background: #fff;
   text-align: right;
   transition: border-color .15s;
+  min-height: 40px;
 }
 .field-input:focus { outline: none; border-color: #2563eb; }
-.field-select { text-align: left; width: 140px; }
+.field-select { text-align: left; width: 150px; }
 .field-textarea {
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 1.5px solid #e2e8f0;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: #1e293b;
   resize: vertical;
   font-family: inherit;
   transition: border-color .15s;
+  min-height: 72px;
 }
 .field-textarea:focus { outline: none; border-color: #2563eb; }
 
 .form-actions {
-  padding: 12px;
+  padding: 14px;
   border-top: 1px solid #e2e8f0;
 }
 .btn-dxf {
   width: 100%;
-  padding: 10px;
+  padding: 13px;      /* botón grande para tablet */
   border-radius: 8px;
   border: none;
   background: #2563eb;
   color: #fff;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   cursor: pointer;
   transition: background .15s, transform .1s;
+  min-height: 48px;
 }
 .btn-dxf:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); }
 .btn-dxf:disabled { opacity: .7; cursor: not-allowed; }
