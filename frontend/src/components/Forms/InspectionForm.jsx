@@ -21,12 +21,9 @@ const TAB_LABELS = {
 
 export default function InspectionForm() {
   const { state, dispatch, setFormValue, getParams } = useInspection();
-  const proyecto = state.proyectos?.[state.proyectoActivo];
-  const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
-  const elemento = carpeta?.elementos?.[state.elementoActivo];
-  if (!elemento) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
-  // Saneamiento: asegurar formValues siempre objeto
-  const formValues = elemento?.formValues || {};
+  const pagina = state.paginas?.[state.paginaActiva];
+  if (!pagina) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
+  const formValues = pagina?.formValues || {};
   const { struct, activeTab, dxfStatus } = state;
 
   const [exportMsg, setExportMsg] = useState(null);
@@ -45,11 +42,11 @@ export default function InspectionForm() {
     // Construir estado plano compatible con exportDXF (mezcla UI state + datos del elemento)
     const flatState = {
       ...state,
-      formValues:   formValues,
-      barStatus:    elemento?.barStatus    || {},
-      pickedStrokes: Array.isArray(elemento?.pickedStrokes) ? elemento.pickedStrokes : [],
-      cracks:        Array.isArray(elemento?.cracks)        ? elemento.cracks        : [],
-      annotations:   Array.isArray(elemento?.annotations)   ? elemento.annotations   : [],
+      formValues:    formValues,
+      barStatus:     pagina?.barStatus     || {},
+      pickedStrokes: Array.isArray(pagina?.pickedStrokes) ? pagina.pickedStrokes : [],
+      cracks:        Array.isArray(pagina?.cracks)        ? pagina.cracks        : [],
+      annotations:   Array.isArray(pagina?.annotations)   ? pagina.annotations   : [],
     };
     const result = await exportDXF(flatState, onStatus);
     if (result?.ok) {

@@ -1,22 +1,12 @@
 import { STRUCTS, getParamsFromValues } from '../config/structures.js';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://structcad2-backend.onrender.com';
 
 /** Precalienta el servidor Render con un ping silencioso al cargar la app */
 export function warmupServer() {
-  // Si API_BASE está vacío (Vercel), usar la ruta absoluta del backend Render
-  const healthUrl = API_BASE
-    ? `${API_BASE}/api/health`
-    : 'https://structcad2-backend.onrender.com/api/health';
-  try {
-    fetch(healthUrl)
-      .then(() => {})
-      .catch((err) => {
-        console.warn('[warmupServer] Falló el health check:', err);
-      });
-  } catch (err) {
-    console.warn('[warmupServer] Excepción inesperada:', err);
-  }
+  fetch(`${API_BASE}/api/health`)
+    .then(() => {})
+    .catch((err) => console.warn('[warmupServer] Falló el health check:', err));
 }
 
 /**

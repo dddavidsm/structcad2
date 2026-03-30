@@ -4,36 +4,44 @@ import { useInspection } from '../../context/InspectionContext.jsx';
 
 export default function ProjectSidebar() {
   const { state, dispatch } = useInspection();
-  const proyecto = state.proyectos?.[state.proyectoActivo];
-  const carpetas = proyecto?.carpetas || {};
-  const carpetaActiva = state.carpetaActiva;
+  const { paginas, paginaActiva } = state;
+  const entries = Object.entries(paginas || {});
 
   return (
     <aside className="project-sidebar">
-      <div className="sidebar-title">Carpetas</div>
+      <div className="sidebar-title">Planos</div>
       <ul className="sidebar-list">
-        {Object.values(carpetas || {}).map((carpeta, idx) => {
-          const cid = Object.keys(carpetas)[idx];
-          return (
-            <li
-              key={cid}
-              className={cid === carpetaActiva ? 'active' : ''}
-              onClick={() => dispatch({ type: 'SET_CARPETA_ACTIVA', payload: cid })}
-            >
-              <span>{carpeta?.nombre}</span>
-              {/* Ejemplo de conteo: Object.keys(carpetas).length */}
-            </li>
-          );
-        })}
+        {entries.map(([pid, pag]) => (
+          <li
+            key={pid}
+            className={pid === paginaActiva ? 'active' : ''}
+            onClick={() => dispatch({ type: 'SET_PAGINA_ACTIVA', payload: pid })}
+          >
+            <span>{pag?.nombre}</span>
+            {entries.length > 1 && (
+              <button
+                className="sidebar-delete-btn"
+                title="Eliminar plano"
+                onClick={e => {
+                  e.stopPropagation();
+                  if (window.confirm(`¿Eliminar "${pag?.nombre}"?`)) {
+                    if (pid === paginaActiva) dispatch({ type: 'SET_PAGINA_ACTIVA', payload: pid });
+                    dispatch({ type: 'DELETE_PAGINA' });
+                  }
+                }}
+              >✕</button>
+            )}
+          </li>
+        ))}
       </ul>
       <button
         className="sidebar-add-btn"
         onClick={() => {
-          const nombre = prompt('Nombre de la nueva carpeta:');
-          if (nombre) dispatch({ type: 'ADD_CARPETA', nombre });
+          const nombre = prompt('Nombre del nuevo plano:');
+          if (nombre) dispatch({ type: 'ADD_PAGINA', nombre });
         }}
       >
-        + Nueva carpeta
+        + Nuevo plano
       </button>
     </aside>
   );

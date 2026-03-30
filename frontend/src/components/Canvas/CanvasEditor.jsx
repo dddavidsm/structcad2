@@ -424,10 +424,14 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     }
   }
 
-  // Estribos en cover_stirrup
+  // Estribos repetidos a intervalos sps (igual que en alzado frontal)
+  const sps = clamp(p.stirrup_spacing||15,5,50);
+  const yTop = oy+marg*sc, yBot = oy+(VH-marg)*sc;
+  const ex1 = ox+cs*sc, ex2 = ox+(d-cs)*sc;
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
-  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+marg*sc); ctx.lineTo(ox+(d-cs)*sc,oy+marg*sc); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(d-cs)*sc,oy+(VH-marg)*sc); ctx.stroke();
+  for (let y=yBot, n=0; y>=yTop-0.5 && n<60; y-=sps*sc, n++) {
+    ctx.beginPath(); ctx.moveTo(ex1,y); ctx.lineTo(ex2,y); ctx.stroke();
+  }
   ctx.setLineDash([]);
 
   dimH(ox,ox+d*sc,oy-20,`${d} cm`);
@@ -435,7 +439,7 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   dimV(oy,oy+VH*sc,ox+d*sc+36,`${VH} cm`);
 
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText(`Vista Lateral  (2 esq.+${nbl} interm.)`,ox+d*sc/2,oy+VH*sc+14);
+  ctx.fillText(`Vista Lateral  (2 esq.+${nbl} interm., est. @${sps}cm)`,ox+d*sc/2,oy+VH*sc+14);
 }
 
 // ── Pilar Rect — Vista Frontal ────────────────────────────────────
@@ -617,35 +621,23 @@ function getViews(struct) {
 
 export default function CanvasEditor() {
   const { state, dispatch, getParams } = useInspection();
-  // Selección del elemento activo
-  const proyecto = state.proyectos?.[state.proyectoActivo];
-  const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
-  const elemento = carpeta?.elementos?.[state.elementoActivo];
-  if (!elemento) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
+  // Página activa (arquitectura plana)
+  const pagina = state.paginas?.[state.paginaActiva];
+  if (!pagina) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
   // Saneamiento seguro de propiedades
-  const pickedStrokes = Array.isArray(elemento?.pickedStrokes)
-    ? elemento.pickedStrokes
-    : Object.values(elemento?.pickedStrokes || {});
-  const cracks = Array.isArray(elemento?.cracks)
-    ? elemento.cracks
-    : Object.values(elemento?.cracks || {});
-  const annotations = Array.isArray(elemento?.annotations)
-    ? elemento.annotations
-    : Object.values(elemento?.annotations || {});
-  const barStatus = elemento?.barStatus || {};
-  const customStirrups = Array.isArray(elemento?.customStirrups)
-    ? elemento.customStirrups
-    : Object.values(elemento?.customStirrups || {});
-  const selectedBars = Array.isArray(elemento?.selectedBars)
-    ? elemento.selectedBars
-    : Object.values(elemento?.selectedBars || {});
-  const formValues = elemento?.formValues || {};
-  // Conteos robustos
-  const cracksCount = Array.isArray(elemento?.cracks) ? elemento.cracks.length : Object.keys(elemento?.cracks || {}).length;
-  const annotationsCount = Array.isArray(elemento?.annotations) ? elemento.annotations.length : Object.keys(elemento?.annotations || {}).length;
-  const customStirrupsCount = Array.isArray(elemento?.customStirrups) ? elemento.customStirrups.length : Object.keys(elemento?.customStirrups || {}).length;
-  const selectedBarsCount = Array.isArray(elemento?.selectedBars) ? elemento.selectedBars.length : Object.keys(elemento?.selectedBars || {}).length;
-  const pickedStrokesCount = Array.isArray(elemento?.pickedStrokes) ? elemento.pickedStrokes.length : Object.keys(elemento?.pickedStrokes || {}).length;
+  const pickedStrokes    = Array.isArray(pagina?.pickedStrokes)  ? pagina.pickedStrokes  : [];
+  const cracks           = Array.isArray(pagina?.cracks)         ? pagina.cracks         : [];
+  const annotations      = Array.isArray(pagina?.annotations)    ? pagina.annotations    : [];
+  const barStatus        = pagina?.barStatus || {};
+  const customStirrups   = Array.isArray(pagina?.customStirrups) ? pagina.customStirrups : [];
+  const selectedBars     = Array.isArray(pagina?.selectedBars)   ? pagina.selectedBars   : [];
+  const formValues       = pagina?.formValues || {};
+  // Conteos
+  const cracksCount         = cracks.length;
+  const annotationsCount    = annotations.length;
+  const customStirrupsCount = customStirrups.length;
+  const selectedBarsCount   = selectedBars.length;
+  const pickedStrokesCount  = pickedStrokes.length;
   const { struct, view, tool, brush } = state;
 
   const cvRef         = useRef(null);
