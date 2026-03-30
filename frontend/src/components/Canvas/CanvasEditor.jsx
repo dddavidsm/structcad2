@@ -596,8 +596,33 @@ export default function CanvasEditor() {
   // Inline annotation input
   const [annInput, setAnnInput] = useState(null); // {x,y,text,editIndex}
 
-  const barPosRef    = useRef([]);
-  const secBoundsRef = useRef({ ox:0, oy:0, sw:1, sh:1 });
+  const barPosRef       = useRef([]);
+  const secBoundsRef    = useRef({ ox:0, oy:0, sw:1, sh:1 });
+  // Claves de memoización: evitan el loop infinito de dispatches en fullRedraw
+  const secBoundsKeyRef = useRef(null);
+  const barPosKeyRef    = useRef(null);
+
+  // ── Wheel handler — se renueva en CADA render para capturar el closure fresco
+  //    (fix rastros de zoom: clearRect usaba cvSize del primer render)
+  wheelHandlerRef.current = (e) => {
+    e.preventDefault();
+    const cv = cvRef.current;
+    if (!cv) return;
+    const rect = cv.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio||1, 3);
+    const mouseX = (e.clientX - rect.left) * (cv.width / rect.width / dpr);
+    const mouseY = (e.clientY - rect.top)  * (cv.height / rect.height / dpr);
+    const { scale, panX, panY } = zoomRef.current;
+    const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+    const newScale = Math.max(0.25, Math.min(8, scale * factor));
+    const ratio = newScale / scale;
+    zoomRef.current = {
+      scale: newScale,
+      panX: mouseX - (mouseX - panX) * ratio,
+      panY: mouseY - (mouseY - panY) * ratio,
+    };
+    fullRedraw();
+  };
 
   // ── Inicializar canvas ──────────────────────────────────────────
   useEffect(() => {
@@ -608,27 +633,8 @@ export default function CanvasEditor() {
     _resize();
     const ro = new ResizeObserver(_resize);
     ro.observe(cv.parentElement);
-
-    // Wheel zoom con passive:false para poder hacer preventDefault
-    wheelHandlerRef.current = (e) => {
-      e.preventDefault();
-      const rect = cv.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio||1, 3);
-      const mouseX = (e.clientX - rect.left) * (cv.width / rect.width / dpr);
-      const mouseY = (e.clientY - rect.top)  * (cv.height / rect.height / dpr);
-      const { scale, panX, panY } = zoomRef.current;
-      const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
-      const newScale = Math.max(0.25, Math.min(8, scale * factor));
-      const ratio = newScale / scale;
-      zoomRef.current = {
-        scale: newScale,
-        panX: mouseX - (mouseX - panX) * ratio,
-        panY: mouseY - (mouseY - panY) * ratio,
-      };
-      fullRedraw();
-    };
+    // addEventListener solo una vez; wheelHandlerRef.current siempre apunta al handler fresco
     cv.addEventListener('wheel', (e) => wheelHandlerRef.current?.(e), { passive: false });
-
     return () => ro.disconnect();
   }, []);
 
@@ -674,7 +680,10 @@ export default function CanvasEditor() {
     const ctx = ctxRef.current;
     const cv  = cvRef.current;
     if (!ctx || !cv || !struct) return;
-    const W = cvSize.W, H = cvSize.H;
+    // Leer dimensiones del canvas real (no de cvSize) → fix clearRect incompleto en zoom
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const W = cv.width / dpr;
+    const H = cv.height / dpr;
     ctx.clearRect(0, 0, W, H);
 
     const p   = getParams();
@@ -714,8 +723,19 @@ export default function CanvasEditor() {
     barPosRef.current    = bps;
     secBoundsRef.current = sb;
 
-    dispatch({ type: 'SET_BAR_POSITIONS', payload: bps });
-    dispatch({ type: 'SET_SECTION_BOUNDS', payload: { ...sb } });
+    // Dispatches memoizados: solo cuando el valor cambia realmente.
+    // Sin esto, cada dispatch provoca un nuevo render que llama a fullRedraw
+    // otra vez → loop infinito que enmascara la persistencia del canvas.
+    const newSbKey = `${sb.ox.toFixed(1)},${sb.oy.toFixed(1)},${sb.sw.toFixed(1)},${sb.sh.toFixed(1)}`;
+    if (newSbKey !== secBoundsKeyRef.current) {
+      secBoundsKeyRef.current = newSbKey;
+      dispatch({ type: 'SET_SECTION_BOUNDS', payload: { ...sb } });
+    }
+    const newBpsKey = bps.map(b => b.id).join(',');
+    if (newBpsKey !== barPosKeyRef.current) {
+      barPosKeyRef.current = newBpsKey;
+      dispatch({ type: 'SET_BAR_POSITIONS', payload: bps });
+    }
 
     // Capa 2: zona pintada (offscreen canvas, dibujado en espacio de contenido)
     const pc = pickedZoneRef.current;

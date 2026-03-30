@@ -29,3 +29,5 @@ Aplicación para la generación de planos técnicos de inspección estructural.
 # Reglas Operativas
 1. Revisa `/docs/ai/architecture.md` antes de proponer cambios en el flujo de datos entre el Canvas y el motor DXF.
 2. Piensa paso a paso: detalla tu lógica matemática antes de modificar coordenadas en `dxf_engine.py`.
+3. DOCUMENTACIÓN CONTINUA: Cualquier cambio que afecte a la arquitectura, dependencias, flujo de datos o despliegue DEBE reflejarse inmediatamente en `README.md` y en `docs/ai/architecture.md`.
+4. ESTRICTA POLÍTICA DE DIRECTORIOS: Prohibido crear carpetas redundantes (ej. nada de `frontend-v2` o `backend_new`). Utiliza la estructura existente (`frontend/` y `backend/`). Solo puedes crear nuevos archivos/componentes si es estrictamente necesario para la organización interna.

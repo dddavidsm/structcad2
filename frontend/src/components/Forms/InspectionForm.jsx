@@ -153,7 +153,13 @@ function FormField({ field, value, onChange }) {
           min={mn} max={mx} step={st}
           value={numRaw}
           onFocus={e => { isFocused.current = true; e.target.select(); }}
-          onChange={e => setNumRaw(e.target.value)}
+          onChange={e => {
+            const raw = e.target.value;
+            setNumRaw(raw);
+            // Propagar al estado global en tiempo real para reactividad del canvas
+            const v = parseFloat(raw);
+            if (!isNaN(v)) onChange(v);
+          }}
           onBlur={() => {
             isFocused.current = false;
             const v = parseFloat(numRaw);
