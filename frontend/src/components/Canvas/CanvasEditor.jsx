@@ -99,46 +99,26 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   // Cotas
   dimH(ox,ox+w*sc,oy-22,`${w} cm`);
   dimV(oy,oy+d*sc,ox+w*sc+22,`${d} cm`);
-  ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
-  ctx.fillText(`est=${cs}cm`,ox+cs*sc*.5,oy-8);
-  ctx.fillText(`r=${cf}cm`,ox+(cs+cf)*sc*.5+4,oy-8);
+  const estABarra=clamp(p.estriboABarra||0,0,10);
+  ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='left';
+  ctx.fillText(`est=${cs}cm  r=${cf}cm${estABarra ? '  e→b='+estABarra+'cm' : ''}`,ox+2,oy-8);
 
-  // Barras cara frontal (LÍNEAS VERTICALES)
+  // ── Barras en sección cenital (solo posiciones → dibujadas como círculos por drawBarsLayer) ──
+  // Cara frontal: nbf barras en borde superior + nbf barras en borde inferior
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   for (let i=0;i<nbf;i++) {
     const bx=ox+(cf+i*spf)*sc;
-    barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+cl*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
-    ctx.beginPath();
-    ctx.moveTo(bx, oy+cf*sc);
-    ctx.lineTo(bx, oy+(d-cf)*sc);
-    ctx.strokeStyle = '#222';
-    ctx.lineWidth = lw;
-    ctx.stroke();
+    barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+cf*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
+    barPositionsOut.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:bx,cy:oy+(d-cf)*sc,r:barR(df,sc),diam:df,type:'frontal-bot'});
   }
-  // Barras laterales (LÍNEAS VERTICALES)
+
+  // Cara lateral: nbl barras intermedias por cada lado (sin esquinas, esas ya son FB/FT)
   if (nbl>0) {
     const spl=(d-2*cl)/(nbl+1);
     for (let i=1;i<=nbl;i++) {
       const by=oy+(cl+i*spl)*sc;
-      ctx.beginPath();
-      ctx.moveTo(ox+cf*sc, by);
-      ctx.lineTo(ox+(w-cf)*sc, by);
-      ctx.strokeStyle = '#222';
-      ctx.lineWidth = lw;
-      ctx.stroke();
-    }
-  }
-
-  // === Estribos en planta NO se dibujan como líneas horizontales ===
-  // Solo el rectángulo perimetral (ya dibujado arriba) es visible en vista cenital
-
-  // Barras laterales: SOLO INTERMEDIAS (esquinas = barras de la cara frontal)
-  if (nbl>0) {
-    const spl=(d-2*cl)/(nbl+1);
-    for (let i=1;i<=nbl;i++) {
-      const by=oy+(cl+i*spl)*sc;
-      barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+cf*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
-      barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-cf)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
+      barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+cl*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
+      barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-cl)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
     }
   }
 }
