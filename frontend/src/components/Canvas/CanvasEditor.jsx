@@ -622,7 +622,15 @@ export default function CanvasEditor() {
   const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
   const elemento = carpeta?.elementos?.[state.elementoActivo];
   if (!elemento) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
-  const { formValues, barStatus, cracks, annotations, customStirrups, selectedBars } = elemento;
+  const { 
+    formValues = {},
+    barStatus = {},
+    cracks = [],
+    annotations = [],
+    customStirrups = [],
+    selectedBars = [],
+    pickedStrokes = [],
+  } = elemento;
   const { struct, view, tool, brush } = state;
 
   const cvRef         = useRef(null);
