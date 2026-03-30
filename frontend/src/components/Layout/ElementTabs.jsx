@@ -12,15 +12,18 @@ export default function ElementTabs() {
   // Saneamiento: tratar elementos como objeto
   return (
     <div className="element-tabs">
-      {Object.entries(elementos || {}).map(([eid, elemento]) => (
-        <div
-          key={eid}
-          className={`tab ${eid === elementoActivo ? 'active' : ''}`}
-          onClick={() => dispatch({ type: 'SET_ELEMENTO_ACTIVO', payload: eid })}
-        >
-          {elemento?.nombre}
-        </div>
-      ))}
+      {Object.values(elementos || {}).map((elemento, idx) => {
+        const eid = Object.keys(elementos)[idx];
+        return (
+          <div
+            key={eid}
+            className={`tab ${eid === elementoActivo ? 'active' : ''}`}
+            onClick={() => dispatch({ type: 'SET_ELEMENTO_ACTIVO', payload: eid })}
+          >
+            {elemento?.nombre}
+          </div>
+        );
+      })}
       <button
         className="tab-add-btn"
         title="Clonar elemento actual"

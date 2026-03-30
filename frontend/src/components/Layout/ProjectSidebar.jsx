@@ -12,15 +12,18 @@ export default function ProjectSidebar() {
     <aside className="project-sidebar">
       <div className="sidebar-title">Carpetas</div>
       <ul className="sidebar-list">
-        {Object.entries(carpetas).map(([cid, carpeta]) => (
-          <li
-            key={cid}
-            className={cid === carpetaActiva ? 'active' : ''}
-            onClick={() => dispatch({ type: 'SET_CARPETA_ACTIVA', payload: cid })}
-          >
-            <span>{carpeta?.nombre}</span>
-          </li>
-        ))}
+        {Object.values(carpetas || {}).map((carpeta, idx) => {
+          const cid = Object.keys(carpetas)[idx];
+          return (
+            <li
+              key={cid}
+              className={cid === carpetaActiva ? 'active' : ''}
+              onClick={() => dispatch({ type: 'SET_CARPETA_ACTIVA', payload: cid })}
+            >
+              <span>{carpeta?.nombre}</span>
+            </li>
+          );
+        })}
       </ul>
       <button
         className="sidebar-add-btn"
