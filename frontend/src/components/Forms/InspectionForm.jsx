@@ -42,7 +42,16 @@ export default function InspectionForm() {
   }
 
   async function handleExport() {
-    const result = await exportDXF(state, onStatus);
+    // Construir estado plano compatible con exportDXF (mezcla UI state + datos del elemento)
+    const flatState = {
+      ...state,
+      formValues:   formValues,
+      barStatus:    elemento?.barStatus    || {},
+      pickedStrokes: Array.isArray(elemento?.pickedStrokes) ? elemento.pickedStrokes : [],
+      cracks:        Array.isArray(elemento?.cracks)        ? elemento.cracks        : [],
+      annotations:   Array.isArray(elemento?.annotations)   ? elemento.annotations   : [],
+    };
+    const result = await exportDXF(flatState, onStatus);
     if (result?.ok) {
       // Guardar en historial
       const p = getParams();

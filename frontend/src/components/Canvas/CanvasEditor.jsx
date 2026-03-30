@@ -622,14 +622,24 @@ export default function CanvasEditor() {
   const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
   const elemento = carpeta?.elementos?.[state.elementoActivo];
   if (!elemento) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
-  // Saneamiento: asegurar arrays/objetos
-  const formValues = elemento?.formValues || {};
+  // Saneamiento seguro de propiedades
+  const pickedStrokes = Array.isArray(elemento?.pickedStrokes)
+    ? elemento.pickedStrokes
+    : Object.values(elemento?.pickedStrokes || {});
+  const cracks = Array.isArray(elemento?.cracks)
+    ? elemento.cracks
+    : Object.values(elemento?.cracks || {});
+  const annotations = Array.isArray(elemento?.annotations)
+    ? elemento.annotations
+    : Object.values(elemento?.annotations || {});
   const barStatus = elemento?.barStatus || {};
-  const cracks = Array.isArray(elemento?.cracks) ? elemento.cracks : Object.values(elemento?.cracks || {});
-  const annotations = Array.isArray(elemento?.annotations) ? elemento.annotations : Object.values(elemento?.annotations || {});
-  const customStirrups = Array.isArray(elemento?.customStirrups) ? elemento.customStirrups : Object.values(elemento?.customStirrups || {});
-  const selectedBars = Array.isArray(elemento?.selectedBars) ? elemento.selectedBars : Object.values(elemento?.selectedBars || {});
-  const pickedStrokes = Array.isArray(elemento?.pickedStrokes) ? elemento.pickedStrokes : Object.values(elemento?.pickedStrokes || {});
+  const customStirrups = Array.isArray(elemento?.customStirrups)
+    ? elemento.customStirrups
+    : Object.values(elemento?.customStirrups || {});
+  const selectedBars = Array.isArray(elemento?.selectedBars)
+    ? elemento.selectedBars
+    : Object.values(elemento?.selectedBars || {});
+  const formValues = elemento?.formValues || {};
   // Conteos robustos
   const cracksCount = Array.isArray(elemento?.cracks) ? elemento.cracks.length : Object.keys(elemento?.cracks || {}).length;
   const annotationsCount = Array.isArray(elemento?.annotations) ? elemento.annotations.length : Object.keys(elemento?.annotations || {}).length;
@@ -726,13 +736,14 @@ export default function CanvasEditor() {
     if (!pc) return;
     const pctx = pc.getContext('2d');
     pctx.clearRect(0, 0, pc.width, pc.height);
-    state.pickedStrokes.forEach(s => {
+    // `pickedStrokes` ya viene saneado del elemento activo (fallback [])
+    pickedStrokes.forEach(s => {
       pctx.globalCompositeOperation = 'source-over';
       pctx.beginPath(); pctx.arc(s.cx, s.cy, s.r, 0, Math.PI*2);
       pctx.fillStyle = 'rgba(251,146,60,.45)'; pctx.fill();
       pctx.strokeStyle = 'rgba(234,88,12,.55)'; pctx.lineWidth = .8; pctx.stroke();
     });
-  }, [state.pickedStrokes]);
+  }, [pickedStrokes]);
 
   // ── Redraw completo ─────────────────────────────────────────────
   useEffect(() => {
@@ -1020,7 +1031,7 @@ export default function CanvasEditor() {
       const erR = brush * 1.5;
       dispatch({
         type: 'SET_PICKED_STROKES',
-        payload: state.pickedStrokes.filter(s => {
+        payload: pickedStrokes.filter(s => {
           const dx=s.cx-x, dy=s.cy-y;
           return Math.sqrt(dx*dx+dy*dy) > (erR + s.r) * .7;
         }),
@@ -1038,7 +1049,7 @@ export default function CanvasEditor() {
   }
 
   function handleClear() {
-    pickHistRef.current.push([...state.pickedStrokes]);
+    pickHistRef.current.push([...pickedStrokes]);
     dispatch({ type: 'CLEAR_CANVAS' });
   }
 

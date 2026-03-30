@@ -30,9 +30,66 @@ const INITIAL = {
   proyectoActivo: 'proyecto-1',
   carpetaActiva: 'carpeta-1',
   elementoActivo: 'elemento-1',
-  page: 'nueva', // Añadido para navegación
-  step: 2,       // Añadido para navegación
+  page: 'nueva',
+  step: 2,
+  // ── UI state (cross-cutting, no pertenece a un elemento individual) ──
+  struct:        null,
+  view:          'section',
+  tool:          'pick',
+  brush:         8,
+  activeTab:     'geometria',
+  dxfStatus:     null,
+  sectionBounds: { ox: 0, oy: 0, sw: 1, sh: 1 },
+  barPositions:  [],
 };
+// --- Añadir carpeta y elemento como objetos ---
+function addCarpeta(state, nombre) {
+  const proyecto = state.proyectos[state.proyectoActivo];
+  const newId = Date.now().toString();
+  return {
+    ...state,
+    proyectos: {
+      ...state.proyectos,
+      [state.proyectoActivo]: {
+        ...proyecto,
+        carpetas: {
+          ...(proyecto.carpetas || {}),
+          [newId]: {
+            nombre,
+            elementos: {},
+          }
+        }
+      }
+    }
+  };
+}
+
+function addElemento(state, nombre) {
+  const proyecto = state.proyectos[state.proyectoActivo];
+  const carpeta = proyecto?.carpetas?.[state.carpetaActiva];
+  const newId = Date.now().toString();
+  return {
+    ...state,
+    proyectos: {
+      ...state.proyectos,
+      [state.proyectoActivo]: {
+        ...proyecto,
+        carpetas: {
+          ...proyecto.carpetas,
+          [state.carpetaActiva]: {
+            ...carpeta,
+            elementos: {
+              ...(carpeta.elementos || {}),
+              [newId]: {
+                nombre,
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+}
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -62,11 +119,16 @@ function deepClone(obj) {
 function reducer(state, action) {
   const { proyectoActivo, carpetaActiva, elementoActivo } = state;
   const proyectos = state.proyectos;
-  const proyecto = proyectos[proyectoActivo];
-  const carpeta = proyecto.carpetas[carpetaActiva];
-  const elemento = carpeta.elementos[elementoActivo];
+  // Guardas de seguridad: evitan crash cuando los IDs activos son null
+  const proyecto  = proyectos?.[proyectoActivo]       || { carpetas: {} };
+  const carpeta   = proyecto.carpetas?.[carpetaActiva] || { elementos: {} };
+  const elemento  = carpeta.elementos?.[elementoActivo] || {};
 
   switch (action.type) {
+    case 'ADD_CARPETA':
+      return addCarpeta(state, action.nombre);
+    case 'ADD_ELEMENTO':
+      return addElemento(state, action.nombre);
     case 'SET_FORM_VALUE': {
       const newElemento = { ...elemento, formValues: { ...elemento.formValues, [action.id]: action.value } };
       const newCarpeta = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: newElemento } };
@@ -164,6 +226,76 @@ function reducer(state, action) {
       return { ...state, page: action.payload };
     case 'SET_STEP':
       return { ...state, step: action.payload };
+
+    // ── UI state ────────────────────────────────────────────────────
+    case 'SELECT_STRUCT':
+      return { ...state, struct: action.payload, view: 'section' };
+    case 'SET_VIEW':
+      return { ...state, view: action.payload };
+    case 'SET_TOOL':
+      return { ...state, tool: action.payload };
+    case 'SET_BRUSH':
+      return { ...state, brush: action.payload };
+    case 'SET_TAB':
+      return { ...state, activeTab: action.payload };
+    case 'SET_DXF_STATUS':
+      return { ...state, dxfStatus: action.payload };
+    case 'SET_BAR_POSITIONS':
+      return { ...state, barPositions: action.payload };
+    case 'SET_SECTION_BOUNDS':
+      return { ...state, sectionBounds: action.payload };
+    case 'ADD_HISTORY':
+      return state; // El historial se persiste en Supabase; no en estado local
+
+    // ── Mutaciones sobre el elemento activo ─────────────────────────
+    case 'SET_SELECTED_BARS': {
+      if (!elementoActivo) return state;
+      const ne = { ...elemento, selectedBars: action.payload };
+      const nc = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: ne } };
+      const np = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: nc } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: np } };
+    }
+    case 'ADD_PICKED_STROKE': {
+      if (!elementoActivo) return state;
+      const base = Array.isArray(elemento.pickedStrokes) ? elemento.pickedStrokes : [];
+      const ne = { ...elemento, pickedStrokes: [...base, action.payload] };
+      const nc = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: ne } };
+      const np = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: nc } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: np } };
+    }
+    case 'ADD_CRACK': {
+      if (!elementoActivo) return state;
+      const base = Array.isArray(elemento.cracks) ? elemento.cracks : [];
+      const ne = { ...elemento, cracks: [...base, action.payload] };
+      const nc = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: ne } };
+      const np = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: nc } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: np } };
+    }
+    case 'ADD_ANNOTATION': {
+      if (!elementoActivo) return state;
+      const base = Array.isArray(elemento.annotations) ? elemento.annotations : [];
+      const ne = { ...elemento, annotations: [...base, action.payload] };
+      const nc = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: ne } };
+      const np = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: nc } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: np } };
+    }
+    case 'UPDATE_ANNOTATION': {
+      if (!elementoActivo) return state;
+      const base = Array.isArray(elemento.annotations) ? elemento.annotations : [];
+      const updated = base.map((a, i) => i === action.index ? { ...a, ...action.changes } : a);
+      const ne = { ...elemento, annotations: updated };
+      const nc = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: ne } };
+      const np = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: nc } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: np } };
+    }
+    case 'CLEAR_CANVAS': {
+      if (!elementoActivo) return state;
+      const ne = { ...elemento, pickedStrokes: [], cracks: [], annotations: [] };
+      const nc = { ...carpeta, elementos: { ...carpeta.elementos, [elementoActivo]: ne } };
+      const np = { ...proyecto, carpetas: { ...proyecto.carpetas, [carpetaActiva]: nc } };
+      return { ...state, proyectos: { ...proyectos, [proyectoActivo]: np } };
+    }
+
     default:
       return state;
   }
@@ -179,8 +311,12 @@ export function InspectionProvider({ children }) {
   const setFormValue = useCallback((id, value) =>
     dispatch({ type: 'SET_FORM_VALUE', id, value }), []);
 
-  const getParams = useCallback(() =>
-    getParamsFromValues(state.struct, state.formValues), [state.struct, state.formValues]);
+  const getParams = useCallback(() => {
+    const proj = state.proyectos?.[state.proyectoActivo];
+    const carp = proj?.carpetas?.[state.carpetaActiva];
+    const elem = carp?.elementos?.[state.elementoActivo];
+    return getParamsFromValues(state.struct, elem?.formValues || {});
+  }, [state.struct, state.proyectos, state.proyectoActivo, state.carpetaActiva, state.elementoActivo]);
 
   return (
     <InspectionCtx.Provider value={{ state, dispatch, setFormValue, getParams }}>
