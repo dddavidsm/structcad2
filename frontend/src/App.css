@@ -70,6 +70,7 @@ body {
   align-items: stretch;
   justify-content: center;
 }
+
 .workspace-form {
   flex: 1;
   min-width: 320px;
@@ -77,6 +78,8 @@ body {
   padding: 0.5rem 1.2rem 1.2rem 1.2rem;
   overflow-y: auto;
 }
+
+.back-btn {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
