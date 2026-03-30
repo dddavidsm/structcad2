@@ -10,6 +10,7 @@ export default function ElementTabs() {
   const elementoActivo = state.elementoActivo;
 
   // Saneamiento: tratar elementos como objeto
+  const elementosCount = Object.keys(elementos || {}).length;
   return (
     <div className="element-tabs">
       {Object.values(elementos || {}).map((elemento, idx) => {
@@ -34,6 +35,7 @@ export default function ElementTabs() {
       >
         +
       </button>
+      {/* Ejemplo de conteo: {elementosCount} elementos */}
     </div>
   );
 }

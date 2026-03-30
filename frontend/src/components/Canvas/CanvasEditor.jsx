@@ -630,6 +630,12 @@ export default function CanvasEditor() {
   const customStirrups = Array.isArray(elemento?.customStirrups) ? elemento.customStirrups : Object.values(elemento?.customStirrups || {});
   const selectedBars = Array.isArray(elemento?.selectedBars) ? elemento.selectedBars : Object.values(elemento?.selectedBars || {});
   const pickedStrokes = Array.isArray(elemento?.pickedStrokes) ? elemento.pickedStrokes : Object.values(elemento?.pickedStrokes || {});
+  // Conteos robustos
+  const cracksCount = Array.isArray(elemento?.cracks) ? elemento.cracks.length : Object.keys(elemento?.cracks || {}).length;
+  const annotationsCount = Array.isArray(elemento?.annotations) ? elemento.annotations.length : Object.keys(elemento?.annotations || {}).length;
+  const customStirrupsCount = Array.isArray(elemento?.customStirrups) ? elemento.customStirrups.length : Object.keys(elemento?.customStirrups || {}).length;
+  const selectedBarsCount = Array.isArray(elemento?.selectedBars) ? elemento.selectedBars.length : Object.keys(elemento?.selectedBars || {}).length;
+  const pickedStrokesCount = Array.isArray(elemento?.pickedStrokes) ? elemento.pickedStrokes.length : Object.keys(elemento?.pickedStrokes || {}).length;
   const { struct, view, tool, brush } = state;
 
   const cvRef         = useRef(null);

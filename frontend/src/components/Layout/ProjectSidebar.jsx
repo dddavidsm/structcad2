@@ -21,6 +21,7 @@ export default function ProjectSidebar() {
               onClick={() => dispatch({ type: 'SET_CARPETA_ACTIVA', payload: cid })}
             >
               <span>{carpeta?.nombre}</span>
+              {/* Ejemplo de conteo: Object.keys(carpetas).length */}
             </li>
           );
         })}
