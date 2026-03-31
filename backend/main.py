@@ -19,15 +19,20 @@ from dxf_engine import (
 
 app = FastAPI(title="StructCAD Pro API", version="2.1.0")
 
-# CORS: permite peticiones desde el frontend (Vercel proxy o desarrollo local).
-# Con allow_origins=["*"] NO se puede usar allow_credentials=True.
+# CORS: orígenes explícitos de producción y desarrollo.
+# allow_origin_regex cubre previews dinámicos de Vercel (structcad2-*.vercel.app).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:4173",
+        "https://structcad2.vercel.app",
+    ],
+    allow_origin_regex=r"https://structcad2.*\.vercel\.app",
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 class InspectionBase(BaseModel):
