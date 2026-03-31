@@ -5,8 +5,8 @@ export const API_URL = import.meta.env.VITE_API_URL || 'https://structcad2-backe
 /** Precalienta el servidor Render con un ping silencioso al cargar la app */
 export function warmupServer() {
   fetch(`${API_URL}/api/health`)
-    .then(() => {})
-    .catch((err) => console.warn('[warmupServer] Falló el health check:', err));
+    .then(res => res.json())
+    .catch(err => console.warn('[warmupServer] Backend inactivo o despertando:', err.message));
 }
 
 /**

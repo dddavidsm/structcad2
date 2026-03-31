@@ -25,9 +25,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept"],
-    expose_headers=["Content-Disposition"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 class InspectionBase(BaseModel):
@@ -47,6 +47,7 @@ class InspectionBase(BaseModel):
     # Circulos normalizados [0,1] de las zonas pintadas con la brocha en el canvas
     # Cada elemento: {nx: float, ny: float, nr: float}
     picked_circles: Optional[List[Any]] = []
+    estriboABarra: Optional[float] = 0.0
 
 class PillarRectData(InspectionBase):
     width: float = Field(..., gt=0)
@@ -138,6 +139,10 @@ def _stream(buf: io.BytesIO, filename: str) -> Response:
 
 @app.get("/api/health")
 def health():
+    return {"status": "ok", "version": "2.1.0"}
+
+@app.get("/api/health/")
+def health_slash():
     return {"status": "ok", "version": "2.1.0"}
 
 @app.post("/api/generate/pillar-rect")
