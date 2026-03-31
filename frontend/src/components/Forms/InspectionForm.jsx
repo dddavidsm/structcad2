@@ -47,6 +47,9 @@ export default function InspectionForm() {
       pickedStrokes: Array.isArray(pagina?.pickedStrokes) ? pagina.pickedStrokes : [],
       cracks:        Array.isArray(pagina?.cracks)        ? pagina.cracks        : [],
       annotations:   Array.isArray(pagina?.annotations)   ? pagina.annotations   : [],
+      customStirrups: Array.isArray(pagina?.customStirrups)
+        ? pagina.customStirrups.map(s => s.barIds || [])
+        : [],
     };
     const result = await exportDXF(flatState, onStatus);
     if (result?.ok) {

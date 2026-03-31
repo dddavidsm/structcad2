@@ -19,6 +19,10 @@ import math
 import ezdxf
 from ezdxf.enums import TextEntityAlignment
 
+# Factores normativos para geometria de estribos (EHE-08 / EC2)
+BEND_RAD_FACTOR = 3.0   # Radio de doblado = 3 * diametro del estribo (en cm)
+HOOK_LEN_FACTOR = 10    # Longitud del gancho = 10 * diametro del estribo (en cm)
+
 # ================================================================
 #  CAPAS
 # ================================================================
@@ -274,6 +278,51 @@ def _stirrup(msp, x, y, w, h, rc=0.8, layer="ESTRIBOS"):
     _L(msp,x+w,y+h,x+w+3,y+h+2.5,layer)  # gancho
 
 
+def _draw_professional_tie(msp, p1, p2, stirrup_diam_cm, recub_real_cm,
+                            layer="ESTRIBOS", add_hooks=False):
+    """
+    Estribo rectangular profesional con arcos de curvatura real en esquinas (EHE-08 / EC2).
+
+    p1=(x_min, y_min), p2=(x_max, y_max): centros del eje del alambre.
+    stirrup_diam_cm : diametro del estribo en cm (ej. 0.8 para O8mm).
+    add_hooks       : dibuja ganchos de cierre a 135deg en la esquina de solape.
+    """
+    x1, y1 = float(p1[0]), float(p1[1])
+    x2, y2 = float(p2[0]), float(p2[1])
+    if x2 < x1: x1, x2 = x2, x1
+    if y2 < y1: y1, y2 = y2, y1
+    w = x2 - x1; h = y2 - y1
+    if w <= 0 or h <= 0:
+        return
+    # Radio de doblado real segun EHE-08: r = BEND_RAD_FACTOR * d
+    rc = max(0.3, stirrup_diam_cm * BEND_RAD_FACTOR)
+    rc = min(rc, w * 0.4, h * 0.4)   # no superar el 40% de la dimension menor
+    lw_val = max(9, int(stirrup_diam_cm * 50))  # O8mm -> lw=40, O6mm -> lw=30
+    # Cuatro lados rectos
+    _L(msp, x1+rc, y1,    x2-rc, y1,    layer, lw=lw_val)   # inferior
+    _L(msp, x2,    y1+rc, x2,    y2-rc, layer, lw=lw_val)   # derecho
+    _L(msp, x2-rc, y2,    x1+rc, y2,    layer, lw=lw_val)   # superior
+    _L(msp, x1,    y2-rc, x1,    y1+rc, layer, lw=lw_val)   # izquierdo
+    # Cuatro arcos con radio de curvatura real
+    _A(msp, x1+rc, y1+rc, rc, 180, 270, layer)   # esquina inf-izq
+    _A(msp, x2-rc, y1+rc, rc, 270, 360, layer)   # esquina inf-der
+    _A(msp, x2-rc, y2-rc, rc,   0,  90, layer)   # esquina sup-der
+    _A(msp, x1+rc, y2-rc, rc,  90, 180, layer)   # esquina sup-izq
+    if add_hooks:
+        # Ganchos de cierre a 135deg desde la esquina superior-derecha (punto de solape)
+        hook_len = max(2.0, stirrup_diam_cm * HOOK_LEN_FACTOR)
+        # Gancho 1: extremo del lado superior, doblado 135deg hacia el interior
+        a1 = math.radians(135)
+        _L(msp, x2-rc, y2,
+           x2-rc + hook_len * math.cos(a1),
+           y2    + hook_len * math.sin(a1), layer, lw=lw_val)
+        # Gancho 2: extremo del lado derecho, doblado 135deg hacia el interior
+        a2 = math.radians(225)
+        _L(msp, x2, y2-rc,
+           x2    + hook_len * math.cos(a2),
+           y2-rc + hook_len * math.sin(a2), layer, lw=lw_val)
+
+
 # ================================================================
 #  COTAS
 # ================================================================
@@ -432,9 +481,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # Contorno exterior (encima de rellenos)
     _rect(msp,PX,PY,W,D,"SECCION",lw=70)
 
-    # Estribo perimetral: dibujado en cover_stirrup desde el borde
-    # El estribo "rodea" las barras (cs < cf, cs < cl)
-    _stirrup(msp, PX+cs, PY+cs, W-2*cs, D-2*cs, rc=1.0)
+    # Estribo perimetral profesional con arcos de curvatura real y ganchos a 135deg
+    _draw_professional_tie(msp, (PX+cs, PY+cs), (PX+W-cs, PY+D-cs),
+                           ds/10, cs, "ESTRIBOS", add_hooks=True)
 
     # Barras cara frontal (arriba y abajo) — incluyen las 4 barras de esquina
     for i in range(nbf):
@@ -447,6 +496,31 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         by = PY + cl + i*spl_int
         _fill_bar(msp, PX+cf,   by, rl)    # columna izquierda
         _fill_bar(msp, PX+W-cf, by, rl)    # columna derecha
+
+    # Mapa ID -> posicion DXF (cm) en la seccion en planta
+    bar_id_to_cm_pos = {}
+    for i in range(nbf):
+        bx = PX + cf + i * spf
+        bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + cl)
+        bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + D - cl)
+    for i in range(1, nbl + 1):
+        by = PY + cl + i * spl_int
+        bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by)
+        bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by)
+
+    # Estribos personalizados (envuelven las barras seleccionadas en planta)
+    cust_stirrups = list(getattr(data, 'customStirrups', None) or [])
+    pad = max(rf, rl) + ds / 20   # radio de barra + semigrosor del estribo
+    for tie_bar_ids in cust_stirrups:
+        pts = [bar_id_to_cm_pos[bid] for bid in tie_bar_ids if bid in bar_id_to_cm_pos]
+        if len(pts) < 2:
+            continue
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        _draw_professional_tie(msp,
+                               (min(xs) - pad, min(ys) - pad),
+                               (max(xs) + pad, max(ys) + pad),
+                               ds/10, 0, "ESTRIBOS", add_hooks=False)
 
     # Cotas
     yc1=PY-10; yc2=PY-18

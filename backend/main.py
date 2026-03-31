@@ -69,6 +69,7 @@ class PillarRectData(InspectionBase):
     stirrup_diam: float = Field(..., gt=0)
     stirrup_spacing: Optional[float] = 15
     inspection_height: float = Field(..., gt=0)
+    customStirrups: Optional[List[List[str]]] = []  # Listado de estribos, donde cada estribo es una lista de IDs de barras 'note-XXXX'
 
 class PillarCircData(InspectionBase):
     diameter: float = Field(..., gt=0)
