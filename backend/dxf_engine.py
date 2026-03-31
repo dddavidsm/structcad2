@@ -352,6 +352,95 @@ def _draw_u_tie(msp, x_min, x_max, y_min, y_max, diam_cm, cx, cy, layer="ESTRIBO
     msp.add_lwpolyline(pts, format='xyb', dxfattribs={"layer": layer, "const_width": cw})
 
 
+def _analyse_and_draw_corner_l_stirrup(msp, pts, pad, cx, cy, diam_cm, layer="ESTRIBOS"):
+    """
+    Analiza si 3 pts forman una esquina en L y dibuja la grapa abierta paralela
+    a la esquina con radio de curvatura real y ganchos a 45 grados hacia el nucleo.
+    Devuelve True si se dibujo, False en caso contrario (fallback a U).
+
+    Logica de deteccion: la barra esquina C comparte X con la barra del brazo
+    vertical V (misma columna) y comparte Y con la barra del brazo horizontal H
+    (misma fila). Se determinan 4 casos (TL/TR/BL/BR) de forma generica usando
+    signos de direccion, sin ramas if/elif por cuadrante.
+    """
+    if len(pts) != 3:
+        return False
+
+    # --- Deteccion de la barra esquina C ---
+    config = None
+    for i in range(3):
+        p_c = pts[i]
+        others = [j for j in range(3) if j != i]
+        v_idx = None  # barra que comparte X con C (brazo vertical)
+        h_idx = None  # barra que comparte Y con C (brazo horizontal)
+        for j in others:
+            if v_idx is None and math.isclose(p_c[0], pts[j][0], abs_tol=0.15):
+                v_idx = j
+            elif h_idx is None and math.isclose(p_c[1], pts[j][1], abs_tol=0.15):
+                h_idx = j
+        if v_idx is not None and h_idx is not None:
+            config = (p_c, pts[h_idx], pts[v_idx])
+            break
+
+    if not config:
+        return False  # No es una L de esquina, usar fallback U
+
+    p_c, p_h, p_v = config  # C=esquina, H=brazo horizontal (comparte Y), V=brazo vertical (comparte X)
+
+    # --- Parametros del estribo ---
+    rc = max(0.3, diam_cm * 3)
+    cw = max(0.3, diam_cm)
+    hook = max(2.0, diam_cm * 4)
+    hh = hook * 0.707  # Componente del gancho a 45 grados
+    b = 0.4142  # tan(22.5 grados) para arco de 90 grados
+
+    # Limitar radio al 35% de cada brazo para evitar geometria imposible
+    arm_h_len = abs(p_h[0] - p_c[0]) + pad
+    arm_v_len = abs(p_v[1] - p_c[1]) + pad
+    rc = max(0.3, min(rc, arm_h_len * 0.35, arm_v_len * 0.35))
+
+    # --- Signos de direccion (genericos, no hay ramas por cuadrante) ---
+    # Posicion de C respecto al nucleo del pilar (para padding exterior)
+    sign_cx = math.copysign(1.0, p_c[0] - cx)   # +1 si C esta a la derecha del nucleo
+    sign_cy = math.copysign(1.0, p_c[1] - cy)   # +1 si C esta por encima del nucleo
+    # Direccion de los brazos respecto a C
+    sign_hx = math.copysign(1.0, p_h[0] - p_c[0])  # +1 si H esta a la derecha de C
+    sign_vy = math.copysign(1.0, p_v[1] - p_c[1])  # +1 si V esta por encima de C
+
+    # --- Coordenadas exteriores padded ---
+    xb_c = p_c[0] + sign_cx * pad   # Borde exterior de la esquina en X
+    yb_c = p_c[1] + sign_cy * pad   # Borde exterior de la esquina en Y
+    xb_h = p_h[0] + sign_hx * pad   # Extremo del brazo H (hacia exterior)
+    yb_v = p_v[1] + sign_vy * pad   # Extremo del brazo V (hacia exterior)
+
+    # --- Arco de curvatura en la esquina ---
+    # El arco va desde el final del brazo H hasta el inicio del brazo V
+    arc_start = (xb_c + sign_hx * rc, yb_c)          # rc en dir H desde la esquina
+    arc_end   = (xb_c, yb_c + sign_vy * rc)           # rc en dir V desde la esquina
+    # Bulge: producto vectorial de la dir entrante (-sign_hx,0) y la dir saliente (0,sign_vy)
+    # cross = (-sign_hx)*sign_vy. Positivo -> CCW (+b), Negativo -> CW (-b)
+    arc_bulge = b if (-sign_hx * sign_vy) > 0 else -b
+
+    # --- Ganchos a 45 grados apuntando hacia el nucleo ---
+    hx_h = math.copysign(hh, cx - xb_h)
+    hy_h = math.copysign(hh, cy - yb_c)
+    hx_v = math.copysign(hh, cx - xb_c)
+    hy_v = math.copysign(hh, cy - yb_v)
+
+    polyline_pts = [
+        (xb_h + hx_h,     yb_c + hy_h,     0),           # Punta gancho brazo H
+        (xb_h,            yb_c,             0),           # Extremo brazo H
+        (arc_start[0],    arc_start[1],     arc_bulge),   # Inicio arco esquina (con bulge)
+        (arc_end[0],      arc_end[1],       0),           # Fin arco / inicio brazo V
+        (xb_c,            yb_v,             0),           # Extremo brazo V
+        (xb_c + hx_v,     yb_v + hy_v,     0),           # Punta gancho brazo V
+    ]
+
+    msp.add_lwpolyline(polyline_pts, format='xyb',
+                       dxfattribs={"layer": layer, "const_width": cw})
+    return True
+
+
 def _draw_professional_tie(msp, p1, p2, stirrup_diam_cm, recub_real_cm,
                             layer="ESTRIBOS", add_hooks=False):
     """
@@ -581,13 +670,17 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by)
         bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by)
 
-    # Estribos personalizados en U — envuelven las barras seleccionadas en planta
+    # Estribos personalizados — L abierta en esquina o U envolvente segun geometria
     cust_stirrups = list(getattr(data, 'customStirrups', None) or [])
     pad = max(rf, rl) + ds / 20   # radio de barra + semigrosor del estribo
     for tie_bar_ids in cust_stirrups:
         pts = [bar_id_to_cm_pos[bid] for bid in tie_bar_ids if bid in bar_id_to_cm_pos]
         if len(pts) < 2:
             continue
+        # Intentar dibujar como L abierta paralela a la esquina (3 barras en L)
+        if _analyse_and_draw_corner_l_stirrup(msp, pts, pad, PX + W/2, PY + D/2, ds/10):
+            continue
+        # Fallback: dibujar como U envolvente (2+ barras o no es esquina en L)
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
         _draw_u_tie(msp,
