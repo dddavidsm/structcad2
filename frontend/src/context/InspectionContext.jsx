@@ -144,6 +144,13 @@ function reducer(state, action) {
       return updatePagina(state, { annotations: action.payload });
     case 'SET_CUSTOM_STIRRUPS':
       return updatePagina(state, { customStirrups: action.payload });
+    case 'ADD_CUSTOM_STIRRUP': {
+      const base = Array.isArray(pag.customStirrups) ? pag.customStirrups : [];
+      return updatePagina(state, { customStirrups: [...base, action.payload] });
+    }
+    case 'CLEAR_CUSTOM_STIRRUPS': {
+      return updatePagina(state, { customStirrups: [] });
+    }
     case 'SET_SELECTED_BARS':
       return updatePagina(state, { selectedBars: action.payload });
     case 'ADD_PICKED_STROKE': {

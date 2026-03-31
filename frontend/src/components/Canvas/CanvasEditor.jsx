@@ -105,9 +105,9 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
 
   // ── Barras en sección cenital (solo posiciones → dibujadas como círculos por drawBarsLayer) ──
   // Cara frontal: nbf barras en borde superior + nbf barras en borde inferior
-  const spf=nbf>1?(w-2*cf)/(nbf-1):0;
+  const spf=nbf>1?(w-2*cl)/(nbf-1):0;
   for (let i=0;i<nbf;i++) {
-    const bx=ox+(cf+i*spf)*sc;
+    const bx=ox+(cl+i*spf)*sc;
     barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+cf*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
     barPositionsOut.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:bx,cy:oy+(d-cf)*sc,r:barR(df,sc),diam:df,type:'frontal-bot'});
   }
@@ -907,14 +907,7 @@ export default function CanvasEditor() {
       return;
     }
 
-    if (tool === 'pick' || tool === 'erase') {
-      const bar = _hitBar(x, y);
-      if (bar && tool === 'pick') {
-        const cycle = { unknown:'found', found:'notfound', notfound:'oxidized', oxidized:'unknown' };
-        dispatch({ type: 'SET_BAR_STATUS', barId: bar.id, status: cycle[barStatus[bar.id]||'unknown'] });
-        return;
-      }
-    }
+    // pick/erase fluye directamente a _paint sin interceptar barras
 
     drawingRef.current = true;
     lastPtRef.current = { x, y };
