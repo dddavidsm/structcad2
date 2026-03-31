@@ -103,22 +103,26 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='left';
   ctx.fillText(`est=${cs}cm  r=${cf}cm${estABarra ? '  e→b='+estABarra+'cm' : ''}`,ox+2,oy-8);
 
+  // Recubrimientos visuales efectivos de las barras (estribo + separación estribo-barra)
+  const v_cf = cf + estABarra;
+  const v_cl = cl + estABarra;
+
   // ── Barras en sección cenital (solo posiciones → dibujadas como círculos por drawBarsLayer) ──
   // Cara frontal: nbf barras en borde superior + nbf barras en borde inferior
-  const spf=nbf>1?(w-2*cl)/(nbf-1):0;
+  const spf=nbf>1?(w-2*v_cl)/(nbf-1):0;
   for (let i=0;i<nbf;i++) {
-    const bx=ox+(cl+i*spf)*sc;
-    barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+cf*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
-    barPositionsOut.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:bx,cy:oy+(d-cf)*sc,r:barR(df,sc),diam:df,type:'frontal-bot'});
+    const bx=ox+(v_cl+i*spf)*sc;
+    barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+v_cf*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
+    barPositionsOut.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:bx,cy:oy+(d-v_cf)*sc,r:barR(df,sc),diam:df,type:'frontal-bot'});
   }
 
   // Cara lateral: nbl barras intermedias por cada lado (sin esquinas, esas ya son FB/FT)
   if (nbl>0) {
-    const spl=(d-2*cl)/(nbl+1);
+    const spl=(d-2*v_cf)/(nbl+1);
     for (let i=1;i<=nbl;i++) {
-      const by=oy+(cl+i*spl)*sc;
-      barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+cl*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
-      barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-cl)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
+      const by=oy+(v_cf+i*spl)*sc;
+      barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+v_cl*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
+      barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-v_cl)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
     }
   }
 }
@@ -325,7 +329,6 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   for(let i=0;i<nbf;i++){
     const bx=ox+(cf+i*spf)*sc;
-    barPositionsOut.push({id:`EV${i+1}`,label:`B${i+1}`,cx:bx,cy:oy+VH*sc*.5,r:barR(df,sc)*.7,diam:df,type:'elevation'});
     ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.5,df/16*sc*.4); ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
@@ -381,9 +384,7 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   // Barras de ESQUINA (compartidas con la cara frontal)
   const cornerMidY = oy+VH*sc*.5;
   ctx.beginPath(); ctx.moveTo(ox+cl*sc,oy+marg*sc); ctx.lineTo(ox+cl*sc,oy+(VH-marg)*sc); ctx.stroke();
-  barPositionsOut.push({id:`CORNER_L`,label:`C`,cx:ox+cl*sc,cy:cornerMidY,r:barR(df,sc)*.7,diam:df,type:'lateral-corner'});
   ctx.beginPath(); ctx.moveTo(ox+(d-cl)*sc,oy+marg*sc); ctx.lineTo(ox+(d-cl)*sc,oy+(VH-marg)*sc); ctx.stroke();
-  barPositionsOut.push({id:`CORNER_R`,label:`C`,cx:ox+(d-cl)*sc,cy:cornerMidY,r:barR(df,sc)*.7,diam:df,type:'lateral-corner'});
 
   // Barras INTERMEDIAS (solo las nbl que introduce el usuario, sin esquinas)
   if (nbl>0) {
@@ -392,7 +393,6 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     for(let i=1;i<=nbl;i++){
       const bx=ox+(cl+i*spl)*sc;
       ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
-      barPositionsOut.push({id:`LV${i}`,label:`L${i}`,cx:bx,cy:cornerMidY,r:barR(dl,sc)*.7,diam:dl,type:'lateral-elev'});
     }
   }
 
@@ -449,7 +449,6 @@ function drawFrontalPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   for(let i=0;i<nbf;i++){
     const bx=ox+(cf+i*spf)*sc;
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
-    barPositionsOut.push({id:`FV${i+1}`,label:`F${i+1}`,cx:bx,cy:oy+VH*sc*.5,r:barR(df,sc)*.7,diam:df,type:'frontal-elev'});
   }
   // Estribos
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
