@@ -160,8 +160,12 @@ function reducer(state, action) {
     }
     case 'UPDATE_ANNOTATION': {
       const base = Array.isArray(pag.annotations) ? pag.annotations : [];
-      const updated = base.map((a, i) => i === action.index ? { ...a, ...action.changes } : a);
+      const updated = base.map(a => a.id === action.id ? { ...a, ...action.changes } : a);
       return updatePagina(state, { annotations: updated });
+    }
+    case 'DELETE_ANNOTATION': {
+      const base = Array.isArray(pag.annotations) ? pag.annotations : [];
+      return updatePagina(state, { annotations: base.filter(a => a.id !== action.id) });
     }
     case 'CLEAR_CANVAS':
       return updatePagina(state, { pickedStrokes: [], cracks: [], annotations: [] });

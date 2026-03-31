@@ -520,8 +520,9 @@ function drawCracks(ctx, cracks, crackPts) {
 }
 
 // ── Anotaciones ───────────────────────────────────────────────────
-function drawAnnotations(ctx, annotations) {
+function drawAnnotations(ctx, annotations, editingId = null) {
   annotations.forEach(ann => {
+    if (editingId && ann.id === editingId) return;
     ctx.save();
     // Caja de fondo
     ctx.font=`600 12px ${FONT}`;
@@ -631,7 +632,9 @@ export default function CanvasEditor() {
   const wheelHandlerRef = useRef(null);
 
   // Inline annotation input
-  const [annInput, setAnnInput] = useState(null); // {x,y,text,editIndex}
+  const [annInput, setAnnInput] = useState(null); // {x,y,text,editId,cssLeft,cssTop}
+  // Menú contextual de nota
+  const [activeNoteMenu, setActiveNoteMenu] = useState(null); // {id,x,y,text,menuLeft,menuTop}
 
   const barPosRef       = useRef([]);
   const secBoundsRef    = useRef({ ox:0, oy:0, sw:1, sh:1 });
@@ -797,7 +800,7 @@ export default function CanvasEditor() {
     drawCracks(ctx, cracks, crackPtsRef.current);
 
     // Capa 5: anotaciones
-    drawAnnotations(ctx, annotations);
+    drawAnnotations(ctx, annotations, annInput?.editId ?? null);
 
     ctx.restore(); // restaura la transformacion zoom/pan
   }
@@ -832,15 +835,15 @@ export default function CanvasEditor() {
 
   function _hitAnnotation(x, y) {
     const ctx = ctxRef.current;
-    if (!ctx) return -1;
+    if (!ctx) return null;
     for (let i = annotations.length - 1; i >= 0; i--) {
       const a = annotations[i];
       ctx.font = `600 12px ${FONT}`;
       const tw = ctx.measureText(a.text).width;
       const pad = 6;
-      if (x >= a.x - pad && x <= a.x + tw + pad && y >= a.y - 16 && y <= a.y + 4) return i;
+      if (x >= a.x - pad && x <= a.x + tw + pad && y >= a.y - 16 && y <= a.y + 4) return a;
     }
-    return -1;
+    return null;
   }
 
   // ── Eventos ─────────────────────────────────────────────────────
@@ -865,19 +868,26 @@ export default function CanvasEditor() {
 
     const { x, y } = _pos(e);
 
+    // Cerrar menú contextual de nota al hacer clic en el canvas
+    if (activeNoteMenu) setActiveNoteMenu(null);
+
     // RESTRICCIÓN: bloquear herramientas de barras/estribos en vistas lateral/section de elevación
     const isElevView = view === 'lateral' || view === 'frontal';
     if (isElevView && (tool === 'select-bar')) return;
 
     if (tool === 'annotate') {
-      const idx = _hitAnnotation(x, y);
-      if (idx >= 0) {
-        // Single click en nota existente → arrastrar para reposicionar
-        dragAnnRef.current = idx;
-        drawingRef.current = true;
+      const ann = _hitAnnotation(x, y);
+      if (ann) {
+        const { scale, panX, panY } = zoomRef.current;
+        setActiveNoteMenu({
+          id: ann.id, x: ann.x, y: ann.y, text: ann.text,
+          menuLeft: ann.x * scale + panX,
+          menuTop: (ann.y - 20) * scale + panY,
+        });
       } else {
-        // Clic en área vacía → nueva nota inline
-        setAnnInput({ x, y, text: '', editIndex: -1 });
+        const { scale, panX, panY } = zoomRef.current;
+        setAnnInput({ x, y, text: '', editId: null,
+          cssLeft: x * scale + panX, cssTop: (y - 16) * scale + panY });
       }
       return;
     }
@@ -900,6 +910,18 @@ export default function CanvasEditor() {
     }
 
     if (tool === 'pick' || tool === 'erase') {
+      if (tool === 'pick') {
+        const ann = _hitAnnotation(x, y);
+        if (ann) {
+          const { scale, panX, panY } = zoomRef.current;
+          setActiveNoteMenu({
+            id: ann.id, x: ann.x, y: ann.y, text: ann.text,
+            menuLeft: ann.x * scale + panX,
+            menuTop: (ann.y - 20) * scale + panY,
+          });
+          return;
+        }
+      }
       const bar = _hitBar(x, y);
       if (bar && tool === 'pick') {
         const cycle = { unknown:'found', found:'notfound', notfound:'oxidized', oxidized:'unknown' };
@@ -942,17 +964,19 @@ export default function CanvasEditor() {
       return;
     }
 
-    if (!drawingRef.current) return;
     const { x, y } = _pos(e);
+
+    if (!drawingRef.current) {
+      if ((tool === 'pick' || tool === 'annotate') && cvRef.current) {
+        const hitAnn = _hitAnnotation(x, y);
+        cvRef.current.style.cursor = hitAnn ? 'pointer' : cursorStyle;
+      }
+      return;
+    }
 
     if (tool === 'crack' && crackPtsRef.current) {
       crackPtsRef.current = { ...crackPtsRef.current, x2: x, y2: y };
       fullRedraw();
-      return;
-    }
-
-    if (dragAnnRef.current !== null) {
-      dispatch({ type: 'UPDATE_ANNOTATION', index: dragAnnRef.current, changes: { x, y } });
       return;
     }
 
@@ -989,16 +1013,6 @@ export default function CanvasEditor() {
     dragAnnRef.current = null;
     lastPtRef.current  = null;
     fullRedraw();
-  }
-
-  /** Doble-click en canvas: editar nota inline */
-  function handleDoubleClick(e) {
-    const { x, y } = _pos(e);
-    const idx = _hitAnnotation(x, y);
-    if (idx >= 0) {
-      const ann = annotations[idx];
-      setAnnInput({ x: ann.x, y: ann.y, text: ann.text, editIndex: idx });
-    }
   }
 
   function _paint(x, y) {
@@ -1045,13 +1059,13 @@ export default function CanvasEditor() {
     dispatch({ type: 'CLEAR_CANVAS' });
   }
 
-  function _confirmAnnotation(x, y, text, editIndex) {
+  function _confirmAnnotation(x, y, text, editId) {
     const t = text.trim();
     if (!t) return;
-    if (editIndex >= 0) {
-      dispatch({ type: 'UPDATE_ANNOTATION', index: editIndex, changes: { text: t } });
+    if (editId) {
+      dispatch({ type: 'UPDATE_ANNOTATION', id: editId, changes: { text: t } });
     } else {
-      dispatch({ type: 'ADD_ANNOTATION', payload: { x, y, text: t } });
+      dispatch({ type: 'ADD_ANNOTATION', payload: { id: `note-${Date.now()}`, x, y, text: t } });
     }
   }
 
@@ -1175,7 +1189,6 @@ export default function CanvasEditor() {
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          onDoubleClick={handleDoubleClick}
           onContextMenu={e=>e.preventDefault()}
         />
 
@@ -1183,7 +1196,7 @@ export default function CanvasEditor() {
         {annInput && (
           <div
             className="ann-input-wrap"
-            style={{ left: annInput.x, top: annInput.y - 16 }}
+            style={{ left: annInput.cssLeft ?? annInput.x, top: annInput.cssTop ?? (annInput.y - 16) }}
           >
             <input
               autoFocus
@@ -1193,18 +1206,53 @@ export default function CanvasEditor() {
               onChange={e => setAnnInput(v => ({ ...v, text: e.target.value }))}
               onKeyDown={e => {
                 if (e.key === 'Enter') {
-                  _confirmAnnotation(annInput.x, annInput.y, annInput.text, annInput.editIndex);
+                  _confirmAnnotation(annInput.x, annInput.y, annInput.text, annInput.editId);
                   setAnnInput(null);
                 } else if (e.key === 'Escape') {
                   setAnnInput(null);
                 }
               }}
               onBlur={() => {
-                _confirmAnnotation(annInput.x, annInput.y, annInput.text, annInput.editIndex);
+                _confirmAnnotation(annInput.x, annInput.y, annInput.text, annInput.editId);
                 setAnnInput(null);
               }}
             />
             <span className="ann-input-hint">Enter para confirmar · Esc para cancelar</span>
+          </div>
+        )}
+
+        {/* Menú contextual de nota */}
+        {activeNoteMenu && (
+          <div
+            className="ann-note-menu"
+            style={{ left: activeNoteMenu.menuLeft, top: activeNoteMenu.menuTop }}
+            onPointerDown={e => e.stopPropagation()}
+          >
+            <button
+              className="ann-menu-btn"
+              onClick={() => {
+                const { scale, panX, panY } = zoomRef.current;
+                setAnnInput({
+                  x: activeNoteMenu.x, y: activeNoteMenu.y,
+                  text: activeNoteMenu.text, editId: activeNoteMenu.id,
+                  cssLeft: activeNoteMenu.menuLeft,
+                  cssTop: activeNoteMenu.menuTop,
+                });
+                setActiveNoteMenu(null);
+              }}
+            >
+              ✏️ Editar
+            </button>
+            <div className="ann-menu-divider" />
+            <button
+              className="ann-menu-btn ann-menu-btn--danger"
+              onClick={() => {
+                dispatch({ type: 'DELETE_ANNOTATION', id: activeNoteMenu.id });
+                setActiveNoteMenu(null);
+              }}
+            >
+              🗑️ Eliminar
+            </button>
           </div>
         )}
       </div>
