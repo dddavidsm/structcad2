@@ -290,34 +290,65 @@ def _stirrup(msp, x, y, w, h, rc=0.8, layer="ESTRIBOS"):
     _L(msp,x+w,y+h,x+w+3,y+h+2.5,layer)  # gancho
 
 
-def _draw_u_tie(msp, x_min, x_max, y_min, y_max, diam_cm, cy, layer="ESTRIBOS"):
-    rc = max(0.3, diam_cm * 3)
-    cw = max(0.3, diam_cm)
-    hook = diam_cm * 4
-    b = 0.4142  # Bulge para 90 grados exactos
+def _draw_u_tie(msp, x_min, x_max, y_min, y_max, diam_cm, cx, cy, layer="ESTRIBOS"):
+    w = x_max - x_min
+    h = y_max - y_min
+    if w <= 0 or h <= 0: return
 
-    if (y_min + y_max) / 2 < cy:  # Barras en la mitad inferior -> U abre hacia ARRIBA
-        pts = [
-            (x_min + hook, y_max - hook, 0),   # Punta gancho izq
-            (x_min,        y_max,        0),   # Esquina sup izq
-            (x_min,        y_min + rc,   b),   # Inicio curva inf izq (Bulge positivo = CCW)
-            (x_min + rc,   y_min,        0),   # Fin curva inf izq
-            (x_max - rc,   y_min,        b),   # Inicio curva inf der
-            (x_max,        y_min + rc,   0),   # Fin curva inf der
-            (x_max,        y_max,        0),   # Esquina sup der
-            (x_max - hook, y_max - hook, 0),   # Punta gancho der
-        ]
-    else:  # Barras en la mitad superior -> U abre hacia ABAJO
-        pts = [
-            (x_min + hook, y_min + hook, 0),   # Punta gancho izq
-            (x_min,        y_min,        0),   # Esquina inf izq
-            (x_min,        y_max - rc,   -b),  # Inicio curva sup izq (Bulge negativo = CW)
-            (x_min + rc,   y_max,        0),   # Fin curva sup izq
-            (x_max - rc,   y_max,        -b),  # Inicio curva sup der
-            (x_max,        y_max - rc,   0),   # Fin curva sup der
-            (x_max,        y_min,        0),   # Esquina inf der
-            (x_max - hook, y_min + hook, 0),   # Punta gancho der
-        ]
+    rc = max(0.3, diam_cm * 3)
+    rc = min(rc, w * 0.4, h * 0.4)
+    cw = max(0.3, diam_cm)
+    hook = max(2.0, diam_cm * 4)
+    hx = hook * 0.707  # Proyeccion X a 45 grados
+    hy = hook * 0.707  # Proyeccion Y a 45 grados
+    b = 0.4142         # Bulge para arco de 90 grados
+
+    if w >= h:  # Grapas HORIZONTALES (caras superior/inferior)
+        if (y_min + y_max) / 2 < cy:  # Cara Inferior -> Abre hacia ARRIBA (nucleo)
+            pts = [
+                (x_min + hx, y_max + hy, 0),
+                (x_min,      y_max,      0),
+                (x_min,      y_min + rc, b),
+                (x_min + rc, y_min,      0),
+                (x_max - rc, y_min,      b),
+                (x_max,      y_min + rc, 0),
+                (x_max,      y_max,      0),
+                (x_max - hx, y_max + hy, 0),
+            ]
+        else:  # Cara Superior -> Abre hacia ABAJO (nucleo)
+            pts = [
+                (x_min + hx, y_min - hy, 0),
+                (x_min,      y_min,      0),
+                (x_min,      y_max - rc, -b),
+                (x_min + rc, y_max,      0),
+                (x_max - rc, y_max,      -b),
+                (x_max,      y_max - rc, 0),
+                (x_max,      y_min,      0),
+                (x_max - hx, y_min - hy, 0),
+            ]
+    else:  # Grapas VERTICALES (caras izquierda/derecha)
+        if (x_min + x_max) / 2 < cx:  # Cara Izquierda -> Abre hacia la DERECHA (nucleo)
+            pts = [
+                (x_max + hx, y_max - hy, 0),
+                (x_max,      y_max,      0),
+                (x_min + rc, y_max,      b),
+                (x_min,      y_max - rc, 0),
+                (x_min,      y_min + rc, b),
+                (x_min + rc, y_min,      0),
+                (x_max,      y_min,      0),
+                (x_max + hx, y_min + hy, 0),
+            ]
+        else:  # Cara Derecha -> Abre hacia la IZQUIERDA (nucleo)
+            pts = [
+                (x_min - hx, y_max - hy, 0),
+                (x_min,      y_max,      0),
+                (x_max - rc, y_max,      -b),
+                (x_max,      y_max - rc, 0),
+                (x_max,      y_min + rc, -b),
+                (x_max - rc, y_min,      0),
+                (x_min,      y_min,      0),
+                (x_min - hx, y_min + hy, 0),
+            ]
     msp.add_lwpolyline(pts, format='xyb', dxfattribs={"layer": layer, "const_width": cw})
 
 
@@ -562,7 +593,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         _draw_u_tie(msp,
                     min(xs) - pad, max(xs) + pad,
                     min(ys) - pad, max(ys) + pad,
-                    ds/10, PY + D/2)
+                    ds/10, PX + W/2, PY + D/2)
 
     # Cotas
     yc1=PY-10; yc2=PY-18
