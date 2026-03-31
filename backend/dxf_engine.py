@@ -65,7 +65,7 @@ def _out(doc):
 #  ASCII PURO
 # ================================================================
 _REPL = {
-    "Ø":"O","ø":"o","°":"deg",
+    "Ø":"%%c","ø":"%%c","°":"deg",
     "á":"a","é":"e","í":"i","ó":"o","ú":"u",
     "Á":"A","É":"E","Í":"I","Ó":"O","Ú":"U",
     "à":"a","è":"e","ì":"i","ò":"o","ù":"u",
@@ -133,10 +133,10 @@ def _rpts(x, y, w, h):
 def _h_poly(msp, pts, layer):
     return [(float(p[0]),float(p[1])) for p in pts]
 
-def _fill_gray(msp, pts, color=252):
+def _fill_gray(msp, pts, color=254):
     """
     Relleno gris solido para hormigon intacto.
-    color 252 = gris medio, visible claramente sobre fondo blanco.
+    color 254 = gris muy claro, maximo contraste con armadura sobre fondo blanco.
     """
     p2 = [(float(p[0]),float(p[1])) for p in pts]
     h = msp.add_hatch(dxfattribs={"layer":"HORMIGON"})
@@ -263,6 +263,18 @@ def _wavy_line(msp, x0, y0, x1, y1, amp=3.0, waves=5,
 
 
 # ================================================================
+#  BARRA VERTICAL GRUESA (alzados)
+# ================================================================
+
+def _draw_thick_vertical_bar(msp, x, y1, y2, diam_cm, layer="ARMADURA"):
+    """Barra longitudinal en alzado: polilínea con const_width = diam_cm (solida)."""
+    msp.add_lwpolyline(
+        [(x, y1), (x, y2)],
+        dxfattribs={"layer": layer, "const_width": max(0.4, diam_cm)},
+    )
+
+
+# ================================================================
 #  ESTRIBO RECTANGULAR
 # ================================================================
 
@@ -276,6 +288,35 @@ def _stirrup(msp, x, y, w, h, rc=0.8, layer="ESTRIBOS"):
     _A(msp,x+w-rc, y+h-rc,rc,0,  90,layer)
     _A(msp,x+rc,   y+h-rc,rc,90,180,layer)
     _L(msp,x+w,y+h,x+w+3,y+h+2.5,layer)  # gancho
+
+
+def _draw_u_tie(msp, x_min, x_max, y_min, y_max, diam_cm, layer="ESTRIBOS"):
+    """
+    Grapa en U: abre por arriba (y_max). Dos ganchos descendentes en los extremos superiores.
+    Arcos de curvatura real (rc = BEND_RAD_FACTOR * diam_cm) en las esquinas inferiores.
+    Dibujada como lwpolyline con const_width para un aspecto solido y profesional.
+    """
+    w = x_max - x_min; h = y_max - y_min
+    if w <= 0 or h <= 0:
+        return
+    rc = max(0.3, diam_cm * BEND_RAD_FACTOR)
+    rc = min(rc, w * 0.4, h * 0.4)
+    cw = max(0.3, diam_cm)
+    hook_d = max(1.0, diam_cm * 4)   # longitud diagonal del gancho (45deg)
+    # Bulge para arco de 90 grados counterclockwise (DXF: centro a la izquierda del viaje)
+    b = math.tan(math.radians(22.5))  # ≈ 0.4142
+    pts = [
+        (x_min + hook_d,  y_max - hook_d,  0),   # punta gancho sup-izq
+        (x_min,           y_max,           0),   # esquina sup-izq
+        (x_min,           y_min + rc,      b),   # pata izq → inicio arco inf-izq
+        (x_min + rc,      y_min,           0),   # tras arco → fondo
+        (x_max - rc,      y_min,           b),   # fondo → inicio arco inf-der
+        (x_max,           y_min + rc,      0),   # tras arco → pata der
+        (x_max,           y_max,           0),   # esquina sup-der
+        (x_max - hook_d,  y_max - hook_d,  0),   # punta gancho sup-der
+    ]
+    msp.add_lwpolyline(pts, format='xyb',
+                       dxfattribs={"layer": layer, "const_width": cw})
 
 
 def _draw_professional_tie(msp, p1, p2, stirrup_diam_cm, recub_real_cm,
@@ -366,8 +407,7 @@ def _dim_v(msp, y1, y2, x_c, x_e, label,
     _L(msp,x_c,y1,x_c,y2,layer,lw=9)
     _arw(msp,x_c,y1,"U",sz,layer)
     _arw(msp,x_c,y2,"D",sz,layer)
-    tx = x_c+ht*.6 if x_c > x_e else x_c-ht*.6
-    _T(msp,tx,(y1+y2)/2,ht,label,layer,TextEntityAlignment.LEFT,90.0)
+    _T(msp, x_c+ht*0.7, (y1+y2)/2, ht, label, layer, TextEntityAlignment.LEFT, 0.0)
 
 
 # ================================================================
@@ -508,7 +548,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by)
         bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by)
 
-    # Estribos personalizados (envuelven las barras seleccionadas en planta)
+    # Estribos personalizados en U — envuelven las barras seleccionadas en planta
     cust_stirrups = list(getattr(data, 'customStirrups', None) or [])
     pad = max(rf, rl) + ds / 20   # radio de barra + semigrosor del estribo
     for tie_bar_ids in cust_stirrups:
@@ -517,10 +557,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             continue
         xs = [p[0] for p in pts]
         ys = [p[1] for p in pts]
-        _draw_professional_tie(msp,
-                               (min(xs) - pad, min(ys) - pad),
-                               (max(xs) + pad, max(ys) + pad),
-                               ds/10, 0, "ESTRIBOS", add_hooks=False)
+        _draw_u_tie(msp,
+                    min(xs) - pad, max(xs) + pad,
+                    min(ys) - pad, max(ys) + pad,
+                    ds/10)
 
     # Cotas
     yc1=PY-10; yc2=PY-18
@@ -539,10 +579,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     _note(msp,PX+W*.65,PY+D*.7,
           PX+W+32,PY+D*.8,
-          [f"{nbf}O{df:.0f}mm cara frontal (+esquinas)",
-           f"{nbl}O{dl:.0f}mm cara lat. intermedias",
-           f"Estribo O{ds:.0f}mm",
-           f"Recub.est.={cs:.0f}cm  barras={cf:.0f}/{cl:.0f}cm"])
+          [f"{nbf} Barras %%c{df:.0f}mm",
+           f"Estribo %%c{ds:.0f}mm"])
 
     _T(msp,PX-16,PY+D/2,2.5,"LATERAL","TEXTO",
        TextEntityAlignment.CENTER,90.0)
@@ -570,14 +608,13 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _L(msp,LX,zb,LX+D,zb,"COTAS",lw=13)
 
     # Barras de ESQUINA (compartidas con la cara frontal), diametro df
-    # Se dibujan en los extremos (x=cl y x=D-cl)
-    _L(msp,LX+cl,   LY+2,LX+cl,   LY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
-    _L(msp,LX+D-cl, LY+2,LX+D-cl, LY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
+    _draw_thick_vertical_bar(msp, LX+cl,   LY+2, LY+VH-2, df/10)
+    _draw_thick_vertical_bar(msp, LX+D-cl, LY+2, LY+VH-2, df/10)
 
     # Barras laterales INTERMEDIAS (solo las nbl intermedias, no las esquinas)
     for i in range(1, nbl+1):
         bx = LX + cl + i*spl_int
-        _L(msp,bx,LY+2,bx,LY+VH-2,"ARMADURA",lw=max(18,int(dl*5)))
+        _draw_thick_vertical_bar(msp, bx, LY+2, LY+VH-2, dl/10)
 
     # Estribos en zona de inspeccion (REPETIDOS SEGÚN stirrup_spacing)
     stirrup_spacing = getattr(data, 'stirrup_spacing', 15)
@@ -601,10 +638,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     n_lat_total = nbl + 2  # intermedias + 2 esquinas
     _note(msp,LX,(zt+zb)/2,LX-40,(zt+zb)/2+5,
-          [f"2O{df:.0f}mm esquina (compartidas)",
-           f"{nbl}O{dl:.0f}mm lat. interm.",
-           f"Total lat.: {n_lat_total} barras/cara",
-           f"Est. O{ds:.0f}mm  r.est.={cs:.0f}cm"])
+          [f"2 %%c{df:.0f}mm esquina",
+           f"{nbl} %%c{dl:.0f}mm lat. interm.",
+           f"Total: {n_lat_total} barras/cara",
+           f"Est. %%c{ds:.0f}mm  r={cs:.0f}cm"])
     _title(msp,LX+D/2,LY-32,"VISTA LATERAL")
 
     # ── 3. VISTA FRONTAL ─────────────────────────────────────────
@@ -622,10 +659,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _L(msp,FX,zt_f,FX+W,zt_f,"COTAS",lw=13)
     _L(msp,FX,zb_f,FX+W,zb_f,"COTAS",lw=13)
 
-    # Barras frontales a lo largo de toda la vista
+    # Barras frontales a lo largo de toda la vista (gruesas, solidas)
     for i in range(nbf):
-        bx=FX+cf+i*spf
-        _L(msp,bx,FY+2,bx,FY+VH-2,"ARMADURA",lw=max(18,int(df*5)))
+        bx = FX + cf + i*spf
+        _draw_thick_vertical_bar(msp, bx, FY+2, FY+VH-2, df/10)
 
     # Estribos en vista frontal (REPETIDOS SEGÚN stirrup_spacing)
     for i in range(n_stirrups):
@@ -646,8 +683,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     _note(msp,FX+W*.65,zt_f-ih*.3,
           FX+W+30,zt_f+5,
-          [f"{nbf}O{df:.0f}mm cara front.",f"Est. O{ds:.0f}mm",
-           f"r.barras={cf:.0f}cm  r.estribo={cs:.0f}cm"])
+          [f"{nbf} %%c{df:.0f}mm cara front.",
+           f"Est. %%c{ds:.0f}mm  r={cf:.0f}/{cs:.0f}cm"])
     _title(msp,FX+W/2,FY-32,"VISTA FRONTAL")
 
     _cajetin(msp,FX+W+28,FY-55,_caj(data))
@@ -686,7 +723,7 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
         ang=math.radians(360*i/nb+90)
         _fill_bar(msp,(R-cov)*math.cos(ang),(R-cov)*math.sin(ang),rb)
 
-    _dim_h(msp,-R,R,-R-14,-R,f"O{diam:.0f}cm",ht=2.5)
+    _dim_h(msp,-R,R,-R-14,-R,f"%%c{diam:.0f}cm",ht=2.5)
     _note(msp,R*.7,R*.7,R+25,R*.8,
           [f"{nb}Ø{db:.0f}mm long.",f"Espiral Ø{ds:.0f}mm",f"Recub: {cov:.0f}cm"])
     _title(msp,0,R+10,"SECCION EN PLANTA")
@@ -714,7 +751,7 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
     _L(msp,AX,zt_a,AX+diam,zt_a,"ESTRIBOS",lw=25)
     _L(msp,AX,zb_a,AX+diam,zb_a,"ESTRIBOS",lw=25)
 
-    _dim_h(msp,AX,AX+diam,AY-12,AY,f"O{diam:.0f}cm",ht=2.2)
+    _dim_h(msp,AX,AX+diam,AY-12,AY,f"%%c{diam:.0f}cm",ht=2.2)
     _dim_v(msp,zb_a,zt_a,AX+diam+12,AX+diam,f"{ih:.0f}",ht=2.0)
     _dim_v(msp,AY,AY+VH,AX+diam+20,AX+diam,f"{VH:.0f}",ht=2.0)
     _title(msp,AX+R,AY-24,"ALZADO")
@@ -862,8 +899,8 @@ def generate_dxf_forjado(data) -> io.BytesIO:
 
     _note(msp,SX+WR*.6,SY+th*.55,SX+WR+28,SY+th*.7,
           [f"r.inf={cb:.0f} / r.sup={ct:.0f}cm",
-           f"Y: {ny}O{dy:.0f}@{spy:.0f}cm",
-           f"X: {nx}O{dx:.0f}@{spx:.0f}cm"])
+           f"Y: {ny} %%c{dy:.0f}@{spy:.0f}cm",
+           f"X: {nx} %%c{dx:.0f}@{spx:.0f}cm"])
 
     _title(msp,SX+WR/2,SY+th+10,"SECCION TRANSVERSAL")
 
@@ -938,7 +975,7 @@ def generate_dxf_footing(data) -> io.BytesIO:
     if nx>1 and spx>0: _dim_h(msp,cs,cs+spx,-18,0,f"{spx:.0f}",ht=1.8)
     _dim_v(msp,0,WW,L+12,L,f"{WW:.0f}",ht=2.5)
     _note(msp,L*.75,WW*.75,L+30,WW*.7,
-          [f"{nx}O{dx:.0f} dir.X",f"{ny}O{dy:.0f} dir.Y",
+          [f"{nx} %%c{dx:.0f} dir.X",f"{ny} %%c{dy:.0f} dir.Y",
            f"r.lat={cs:.0f} / r.inf={cb:.0f}cm"])
     _title(msp,L/2,WW+10,"PLANTA ARMADURA")
 
@@ -1022,8 +1059,8 @@ def generate_dxf_stair(data) -> io.BytesIO:
     _dim_v(msp,oy-riser,oy,ox-12,ox,f"{riser:.0f}",ht=2.0)
     _dim_v(msp,be[1],be[1]+th,ox+n*tread+12,ox+n*tread,f"{th:.0f}",ht=2.0)
     _note(msp,ox+n*tread*.5,oy-n*riser*.35,ox+n*tread+28,oy-n*riser*.5,
-          [f"Long: O{dl:.0f}@{sl:.0f}cm",
-           f"Trans: O{dt:.0f}@{st:.0f}cm",f"Recub: {cov:.0f}cm"])
+          [f"Long: %%c{dl:.0f}@{sl:.0f}cm",
+           f"Trans: %%c{dt:.0f}@{st:.0f}cm",f"Recub: {cov:.0f}cm"])
     _title(msp,ox+n*tread/2,oy+th+20,"SECCION LONGITUDINAL - ZANCA")
     _cajetin(msp,ox+n*tread+18,oy-n*riser-55,_caj(data))
     return _out(doc)
