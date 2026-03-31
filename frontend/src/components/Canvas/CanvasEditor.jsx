@@ -658,9 +658,9 @@ function drawCustomStirrupsLateral(ctx, customStirrups, sb, p, view) {
 
     // Etiqueta con posición
     const distCm = (ny * ih).toFixed(1);
-    // Etiqueta fuera del plano (borde derecho del sectionBounds)
-    const labelX = sb.ox + sb.sw + 6;
-    ctx.fillStyle = '#92400e'; ctx.font = `600 9px ${FONT}`; ctx.textAlign = 'left';
+    // Etiqueta a la izquierda del plano (borde izquierdo del sectionBounds)
+    const labelX = sb.ox - 8;
+    ctx.fillStyle = '#92400e'; ctx.font = `600 9px ${FONT}`; ctx.textAlign = 'right';
     ctx.fillText(`E${idx + 1}: ${distCm}cm`, labelX, y + 3);
     ctx.restore();
   });
