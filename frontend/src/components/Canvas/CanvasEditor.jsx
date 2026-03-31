@@ -620,7 +620,7 @@ export default function CanvasEditor() {
   const drawingRef    = useRef(false);
   const lastPtRef     = useRef(null);
   const crackPtsRef   = useRef(null);
-  const dragAnnRef    = useRef(null);
+  const dragAnnRef    = useRef(null); // { id, startX, startY, moved: boolean }
   const [cvSize, setCvSize] = useState({ W: 400, H: 328 });
 
   // Zoom / Pan
@@ -875,21 +875,19 @@ export default function CanvasEditor() {
     const isElevView = view === 'lateral' || view === 'frontal';
     if (isElevView && (tool === 'select-bar')) return;
 
-    if (tool === 'annotate') {
+    if (tool === 'annotate' || tool === 'pick') {
       const ann = _hitAnnotation(x, y);
       if (ann) {
-        const { scale, panX, panY } = zoomRef.current;
-        setActiveNoteMenu({
-          id: ann.id, x: ann.x, y: ann.y, text: ann.text,
-          menuLeft: ann.x * scale + panX,
-          menuTop: (ann.y - 20) * scale + panY,
-        });
-      } else {
+        if (activeNoteMenu) setActiveNoteMenu(null);
+        dragAnnRef.current = { id: ann.id, startX: x, startY: y, moved: false };
+        return;
+      }
+      if (tool === 'annotate') {
         const { scale, panX, panY } = zoomRef.current;
         setAnnInput({ x, y, text: '', editId: null,
           cssLeft: x * scale + panX, cssTop: (y - 16) * scale + panY });
+        return;
       }
-      return;
     }
 
     if (tool === 'select-bar') {
@@ -910,18 +908,6 @@ export default function CanvasEditor() {
     }
 
     if (tool === 'pick' || tool === 'erase') {
-      if (tool === 'pick') {
-        const ann = _hitAnnotation(x, y);
-        if (ann) {
-          const { scale, panX, panY } = zoomRef.current;
-          setActiveNoteMenu({
-            id: ann.id, x: ann.x, y: ann.y, text: ann.text,
-            menuLeft: ann.x * scale + panX,
-            menuTop: (ann.y - 20) * scale + panY,
-          });
-          return;
-        }
-      }
       const bar = _hitBar(x, y);
       if (bar && tool === 'pick') {
         const cycle = { unknown:'found', found:'notfound', notfound:'oxidized', oxidized:'unknown' };
@@ -966,6 +952,20 @@ export default function CanvasEditor() {
 
     const { x, y } = _pos(e);
 
+    // ── Drag vs Click de nota ────────────────────────────────────
+    if (dragAnnRef.current) {
+      const dx = x - dragAnnRef.current.startX;
+      const dy = y - dragAnnRef.current.startY;
+      if (!dragAnnRef.current.moved && Math.hypot(dx, dy) > 3) {
+        dragAnnRef.current.moved = true;
+        if (activeNoteMenu) setActiveNoteMenu(null);
+      }
+      if (dragAnnRef.current.moved) {
+        dispatch({ type: 'UPDATE_ANNOTATION', id: dragAnnRef.current.id, changes: { x, y } });
+      }
+      return;
+    }
+
     if (!drawingRef.current) {
       if ((tool === 'pick' || tool === 'annotate') && cvRef.current) {
         const hitAnn = _hitAnnotation(x, y);
@@ -1000,7 +1000,26 @@ export default function CanvasEditor() {
     pointerCacheRef.current = pointerCacheRef.current.filter(p => p.id !== e.pointerId);
     if (pointerCacheRef.current.length < 2) pinchInitRef.current = null;
 
-    if (!drawingRef.current && dragAnnRef.current === null) return;
+    // ── Drag vs Click: resolver intención al soltar ──────────────
+    if (dragAnnRef.current) {
+      if (!dragAnnRef.current.moved) {
+        // Clic limpio sin arrastre → abrir menú contextual
+        const ann = annotations.find(a => a.id === dragAnnRef.current.id);
+        if (ann) {
+          const { scale, panX, panY } = zoomRef.current;
+          setActiveNoteMenu({
+            id: ann.id, x: ann.x, y: ann.y, text: ann.text,
+            menuLeft: ann.x * scale + panX,
+            menuTop: (ann.y - 20) * scale + panY,
+          });
+        }
+      }
+      dragAnnRef.current = null;
+      fullRedraw();
+      return;
+    }
+
+    if (!drawingRef.current) return;
 
     if (tool === 'crack' && crackPtsRef.current) {
       const c = crackPtsRef.current;
@@ -1010,7 +1029,6 @@ export default function CanvasEditor() {
     }
 
     drawingRef.current = false;
-    dragAnnRef.current = null;
     lastPtRef.current  = null;
     fullRedraw();
   }
