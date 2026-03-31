@@ -36,7 +36,7 @@ LAYERS = {
     "SECCION":  {"color": 7,  "lw": 70},
     "HORMIGON": {"color": 8,  "lw":  0},
     "PICADO":   {"color": 30, "lw":  0},
-    "ARMADURA": {"color": 7,  "lw": 50},
+    "ARMADURA": {"color": 250, "lw": 50},
     "ESTRIBOS": {"color": 7,  "lw": 35},
     "COTAS":    {"color": 8,  "lw": 13},
     "TEXTO":    {"color": 7,  "lw": 13},
@@ -171,15 +171,11 @@ def _fill_picado(msp, pts):
         except Exception:
             continue
 
-def _fill_bar(msp, cx, cy, r):
-    """Barra de acero: circulo negro solido (relleno color 250 = casi negro)."""
-    n = 24
-    pts = [(cx+r*math.cos(math.radians(i*360/n)),
-            cy+r*math.sin(math.radians(i*360/n))) for i in range(n)]
-    h = msp.add_hatch(dxfattribs={"layer":"ARMADURA"})
-    h.set_solid_fill(color=250)
-    h.paths.add_polyline_path(pts, is_closed=True)
-    _C(msp, cx, cy, r, "ARMADURA", lw=20)
+def _fill_bar(msp, cx, cy, r, layer="ARMADURA"):
+    """Barra de acero: circulo negro solido (relleno color 250 = grafito macizo)."""
+    hatch = msp.add_hatch(color=250, dxfattribs={"layer": layer})
+    path = hatch.paths.add_edge_path()
+    path.add_arc((cx, cy), r, 0, 360)
 
 
 def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h, target_view='section'):
@@ -270,7 +266,7 @@ def _draw_thick_vertical_bar(msp, x, y1, y2, diam_cm, layer="ARMADURA"):
     """Barra longitudinal en alzado: polilínea con const_width = diam_cm (solida)."""
     msp.add_lwpolyline(
         [(x, y1), (x, y2)],
-        dxfattribs={"layer": layer, "const_width": max(0.4, diam_cm)},
+        dxfattribs={"layer": layer, "const_width": max(0.4, diam_cm), "color": 250},
     )
 
 
