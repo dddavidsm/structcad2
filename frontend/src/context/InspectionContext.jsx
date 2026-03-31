@@ -43,41 +43,17 @@ function reducer(state, action) {
 
     // ── Selección de estructura ────────────────────────────────
     case 'SELECT_STRUCT': {
-      const existing = state.paginas || {};
-      const hasPages  = Object.keys(existing).length > 0;
-
-      // Si ya hay páginas Y el struct es el mismo → añadir nuevo plano
-      if (hasPages && state.struct === action.payload) {
-        const newId  = `pag-${Date.now()}`;
-        const newPag = {
-          nombre:        `Plano ${Object.keys(existing).length + 1}`,
-          formValues:    {},
-          barStatus:     {},
-          pickedStrokes: [],
-          cracks:        [],
-          annotations:   [],
-          customStirrups:[],
-        };
-        return {
-          ...state,
-          view:         'section',
-          step:         2,
-          page:         'nueva',
-          paginas:      { ...existing, [newId]: newPag },
-          paginaActiva: newId,
-        };
-      }
-
-      // Primera vez o struct diferente → resetear
-      const pid = 'pag-1';
-      const pagina = {
-        nombre:        'Plano 1',
+      const newId = `pag-${Date.now()}`;
+      const newPag = {
+        nombre:        `Plano ${Object.keys(state.paginas || {}).length + 1}`,
+        struct:        action.payload,
         formValues:    {},
         barStatus:     {},
         pickedStrokes: [],
         cracks:        [],
         annotations:   [],
         customStirrups:[],
+        selectedBars:  [],
       };
       return {
         ...state,
@@ -85,8 +61,8 @@ function reducer(state, action) {
         view:         'section',
         step:         2,
         page:         'nueva',
-        paginas:      { [pid]: pagina },
-        paginaActiva: pid,
+        paginas:      { ...(state.paginas || {}), [newId]: newPag },
+        paginaActiva: newId,
       };
     }
 
@@ -98,7 +74,7 @@ function reducer(state, action) {
 
     // ── Gestión de páginas ─────────────────────────────────────
     case 'SET_PAGINA_ACTIVA':
-      return { ...state, paginaActiva: action.payload };
+      return { ...state, paginaActiva: action.payload, struct: state.paginas[action.payload]?.struct || state.struct };
     case 'ADD_PAGINA': {
       const newId = `pag-${Date.now()}`;
       const newPag = {
@@ -128,7 +104,7 @@ function reducer(state, action) {
     case 'DELETE_PAGINA': {
       const { [state.paginaActiva]: _omit, ...rest } = state.paginas;
       const nextId = Object.keys(rest)[0] || null;
-      return { ...state, paginas: rest, paginaActiva: nextId };
+      return { ...state, paginas: rest, paginaActiva: nextId, struct: nextId ? rest[nextId].struct : null, step: nextId ? 2 : 1 };
     }
 
     // ── Datos del plano activo ─────────────────────────────────
@@ -175,7 +151,7 @@ function reducer(state, action) {
       return updatePagina(state, { annotations: base.filter(a => a.id !== action.id) });
     }
     case 'CLEAR_CANVAS':
-      return updatePagina(state, { pickedStrokes: [], cracks: [], annotations: [] });
+      return updatePagina(state, { pickedStrokes: [], cracks: [], annotations: [], customStirrups: [], selectedBars: [] });
 
     // ── UI state ───────────────────────────────────────────────
     case 'SET_VIEW':

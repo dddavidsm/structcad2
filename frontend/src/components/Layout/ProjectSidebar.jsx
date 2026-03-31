@@ -4,71 +4,58 @@ import { useInspection } from '../../context/InspectionContext.jsx';
 
 export default function ProjectSidebar() {
   const { state, dispatch } = useInspection();
-
   const { paginas, paginaActiva } = state;
   const entries = Object.entries(paginas || {});
-  const [editingId, setEditingId] = useState(null);
-  const [editValue, setEditValue] = useState("");
+  const [editingTab, setEditingTab] = useState(null);
+  const [editName, setEditName] = useState('');
+
+  function saveName(pid) {
+    if (editName.trim()) dispatch({ type: 'RENAME_PAGINA', pid, nombre: editName.trim() });
+    setEditingTab(null);
+  }
 
   return (
-    <aside className="project-sidebar">
-      <div className="sidebar-title">Planos</div>
+    <div className="excel-tabs-bar">
       <ul className="sidebar-list">
         {entries.map(([pid, pag]) => (
           <li
             key={pid}
             className={pid === paginaActiva ? 'active' : ''}
             onClick={() => dispatch({ type: 'SET_PAGINA_ACTIVA', payload: pid })}
-            onDoubleClick={() => {
-              setEditingId(pid);
-              setEditValue(pag?.nombre || "");
-            }}
           >
-            {editingId === pid ? (
+            {editingTab === pid ? (
               <input
-                type="text"
-                value={editValue}
                 autoFocus
-                onChange={e => setEditValue(e.target.value)}
-                onBlur={() => {
-                  dispatch({ type: 'RENAME_PAGINA', pid, nombre: editValue });
-                  setEditingId(null);
-                }}
+                className="tab-input"
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                onBlur={() => saveName(pid)}
                 onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    dispatch({ type: 'RENAME_PAGINA', pid, nombre: editValue });
-                    setEditingId(null);
-                  } else if (e.key === 'Escape') {
-                    setEditingId(null);
-                  }
+                  if (e.key === 'Enter') saveName(pid);
+                  else if (e.key === 'Escape') setEditingTab(null);
                 }}
                 onClick={e => e.stopPropagation()}
-                className="sidebar-edit-input"
               />
             ) : (
-              <span className="sidebar-pagina-name">{pag?.nombre}</span>
+              <span onDoubleClick={() => { setEditingTab(pid); setEditName(pag?.nombre || ''); }}>
+                {pag?.nombre}
+              </span>
             )}
             {entries.length > 1 && (
               <button
                 className="sidebar-delete-btn"
                 title="Eliminar plano"
-                onClick={e => {
-                  e.stopPropagation();
-                  dispatch({ type: 'DELETE_PAGINA' });
-                }}
+                onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PAGINA' }); }}
               >✕</button>
             )}
           </li>
         ))}
-        {/* Añadir nuevo plano inline */}
-        <li
-          className="sidebar-add-item"
-          onClick={() => dispatch({ type: 'ADD_PAGINA', nombre: `Plano ${entries.length + 1}` })}
-          title="Añadir plano"
-        >
-          <span>＋</span>
-        </li>
       </ul>
-    </aside>
+      <button
+        className="sidebar-add-btn"
+        title="Añadir plano"
+        onClick={() => dispatch({ type: 'SET_STEP', payload: 1 })}
+      >＋</button>
+    </div>
   );
 }
