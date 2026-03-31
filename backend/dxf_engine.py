@@ -37,6 +37,7 @@ LAYERS = {
     "COTAS":    {"color": 8,  "lw": 13},
     "TEXTO":    {"color": 7,  "lw": 13},
     "CAJETIN":  {"color": 7,  "lw": 18},
+    "FISURAS":  {"color": 1,  "lw": 35},
 }
 
 def _make_doc():
@@ -177,15 +178,16 @@ def _fill_bar(msp, cx, cy, r):
     _C(msp, cx, cy, r, "ARMADURA", lw=20)
 
 
-def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h):
+def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h, target_view='section'):
     """
     Rellena zonas picadas UNICAMENTE donde el usuario pinto con la brocha.
 
-    circles : lista de dicts {nx, ny, nr} con coordenadas normalizadas [0,1].
+    circles : lista de dicts {nx, ny, nr, view} con coordenadas normalizadas [0,1].
               nx/ny son el centro normalizado, nr es el radio normalizado
               respecto a min(struct_w, struct_h).
     px, py  : origen de la seccion en el espacio DXF (cm).
     struct_w/h : dimensiones reales de la seccion en cm.
+    target_view: filtra circulos por la vista ('section', 'lateral', 'frontal').
 
     Nota: el eje Y del canvas es hacia abajo (top=0) y el DXF hacia arriba
     (bottom=0), por lo que se invierte ny -> (1 - ny).
@@ -195,6 +197,8 @@ def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h):
     min_dim = min(struct_w, struct_h)
     n_pts = 32
     for c in circles:
+        if c.get('view') and c.get('view') != target_view:
+            continue
         try:
             nx = float(c.get('nx', 0))
             ny = float(c.get('ny', 0))
@@ -209,6 +213,22 @@ def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h):
                    for i in range(n_pts)]
             _fill_picado(msp, pts)
         except (ValueError, TypeError, KeyError):
+            continue
+
+
+def _draw_cracks(msp, cracks, px, py, struct_w, struct_h, target_view='section'):
+    if not cracks: return
+    for c in cracks:
+        if c.get('view') and c.get('view') != target_view: continue
+        try:
+            nx1, ny1 = float(c.get('nx1', 0)), float(c.get('ny1', 0))
+            nx2, ny2 = float(c.get('nx2', 0)), float(c.get('ny2', 0))
+            x1 = px + nx1 * struct_w
+            y1 = py + (1.0 - ny1) * struct_h
+            x2 = px + nx2 * struct_w
+            y2 = py + (1.0 - ny2) * struct_h
+            _wavy_line(msp, x1, y1, x2, y2, amp=1.5, waves=4, layer="FISURAS", lw=30)
+        except Exception:
             continue
 
 
@@ -405,7 +425,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Zona picada: solo donde el usuario pinto con la brocha
     circles = list(getattr(data, 'picked_circles', None) or [])
-    _fill_picado_circles(msp, circles, PX, PY, W, D)
+    cracks = list(getattr(data, 'cracks_data', None) or [])
+    _fill_picado_circles(msp, circles, PX, PY, W, D, 'section')
+    _draw_cracks(msp, cracks, PX, PY, W, D, 'section')
 
     # Contorno exterior (encima de rellenos)
     _rect(msp,PX,PY,W,D,"SECCION",lw=70)
@@ -465,6 +487,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Hormigon intacto en toda la vista lateral
     _fill_gray(msp,_rpts(LX,LY,D,VH))
+    _fill_picado_circles(msp, circles, LX, LY, D, VH, 'lateral')
+    _draw_cracks(msp, cracks, LX, LY, D, VH, 'lateral')
     _rect(msp,LX,LY,D,VH,"SECCION",lw=70)
 
     # Lineas de zona inspeccionada
@@ -516,6 +540,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Hormigon intacto en toda la vista frontal
     _fill_gray(msp,_rpts(FX,FY,W,VH))
+    _fill_picado_circles(msp, circles, FX, FY, W, VH, 'frontal')
+    _draw_cracks(msp, cracks, FX, FY, W, VH, 'frontal')
     _rect(msp,FX,FY,W,VH,"SECCION",lw=70)
 
     # Lineas de zona inspeccionada

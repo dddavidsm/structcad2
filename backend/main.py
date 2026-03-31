@@ -50,8 +50,10 @@ class InspectionBase(BaseModel):
     canvas_data: Optional[str] = None
     markers: Optional[List[Any]] = []
     # Circulos normalizados [0,1] de las zonas pintadas con la brocha en el canvas
-    # Cada elemento: {nx: float, ny: float, nr: float}
+    # Cada elemento: {nx: float, ny: float, nr: float, view: str}
     picked_circles: Optional[List[Any]] = []
+    # Fisuras normalizadas: {nx1, ny1, nx2, ny2, view}
+    cracks_data: Optional[List[Any]] = []
     estriboABarra: Optional[float] = 0.0
 
 class PillarRectData(InspectionBase):

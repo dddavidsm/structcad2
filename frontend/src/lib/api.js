@@ -28,6 +28,7 @@ export async function exportDXF(state, onStatus) {
   const p = getParamsFromValues(struct, formValues);
   p.markers     = (barPositions || []).map(b => ({ ...b, found: (barStatus || {})[b.id] || 'unknown' }));
   p.cracks_count = (cracks || []).length;
+  p.cracks_data = _normalizeCracks(cracks || [], sectionBounds);
   p.annotations  = (annotations || []).map(a => ({ text: a.text, x: a.x, y: a.y }));
   p.view         = view;
   p.picked_circles = _normalizeStrokes(pickedStrokes || [], sectionBounds);
@@ -113,6 +114,19 @@ function _normalizeStrokes(strokes, bounds) {
       nx: (s.cx - ox) / sw,
       ny: (s.cy - oy) / sh,
       nr: s.r / minDim,
+      view: s.view || 'section'
     }))
-    .filter(c => c.nx > -0.15 && c.nx < 1.15 && c.ny > -0.15 && c.ny < 1.15 && c.nr > 0.001);
+    .filter(c => c.nr > 0.001);
+}
+
+function _normalizeCracks(cracks, bounds) {
+  if (!cracks.length || !bounds) return [];
+  const { ox, oy, sw, sh } = bounds;
+  return cracks.map(c => ({
+    nx1: (c.x1 - ox) / sw,
+    ny1: (c.y1 - oy) / sh,
+    nx2: (c.x2 - ox) / sw,
+    ny2: (c.y2 - oy) / sh,
+    view: c.view || 'section'
+  }));
 }
