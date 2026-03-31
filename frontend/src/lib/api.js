@@ -105,28 +105,36 @@ function _dateTag() {
  * Normaliza los trazos pintados en el canvas a coordenadas [0,1] relativas
  * a los limites de la seccion estructural.
  */
-function _normalizeStrokes(strokes, bounds) {
-  if (!strokes.length || !bounds) return [];
-  const { ox, oy, sw, sh } = bounds;
-  const minDim = Math.min(sw, sh);
-  return strokes
-    .map(s => ({
+function _normalizeStrokes(strokes, fallbackBounds) {
+  if (!strokes.length) return [];
+  return strokes.map(s => {
+    const b = s.bounds || fallbackBounds;
+    if (!b) return null;
+    const { ox, oy, sw, sh } = b;
+    const minDim = Math.min(sw, sh);
+    const nr = s.r / minDim;
+    if (nr <= 0.001) return null;
+    return {
       nx: (s.cx - ox) / sw,
       ny: (s.cy - oy) / sh,
-      nr: s.r / minDim,
+      nr,
       view: s.view || 'section'
-    }))
-    .filter(c => c.nr > 0.001);
+    };
+  }).filter(Boolean);
 }
 
-function _normalizeCracks(cracks, bounds) {
-  if (!cracks.length || !bounds) return [];
-  const { ox, oy, sw, sh } = bounds;
-  return cracks.map(c => ({
-    nx1: (c.x1 - ox) / sw,
-    ny1: (c.y1 - oy) / sh,
-    nx2: (c.x2 - ox) / sw,
-    ny2: (c.y2 - oy) / sh,
-    view: c.view || 'section'
-  }));
+function _normalizeCracks(cracks, fallbackBounds) {
+  if (!cracks.length) return [];
+  return cracks.map(c => {
+    const b = c.bounds || fallbackBounds;
+    if (!b) return null;
+    const { ox, oy, sw, sh } = b;
+    return {
+      nx1: (c.x1 - ox) / sw,
+      ny1: (c.y1 - oy) / sh,
+      nx2: (c.x2 - ox) / sw,
+      ny2: (c.y2 - oy) / sh,
+      view: c.view || 'section'
+    };
+  }).filter(Boolean);
 }

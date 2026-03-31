@@ -1021,7 +1021,7 @@ export default function CanvasEditor() {
     if (tool === 'crack' && crackPtsRef.current) {
       const c = crackPtsRef.current;
       const dx=c.x2-c.x1, dy=c.y2-c.y1;
-      if (Math.sqrt(dx*dx+dy*dy) > 5) dispatch({ type: 'ADD_CRACK', payload: { ...c } });
+      if (Math.sqrt(dx*dx+dy*dy) > 5) dispatch({ type: 'ADD_CRACK', payload: { ...c, view: view, bounds: { ...secBoundsRef.current } } });
       crackPtsRef.current = null;
     }
 
@@ -1043,7 +1043,7 @@ export default function CanvasEditor() {
       pctx.beginPath(); pctx.arc(x, y, brush, 0, Math.PI*2);
       pctx.fillStyle = 'rgba(251,146,60,.45)'; pctx.fill();
       pctx.strokeStyle = 'rgba(234,88,12,.55)'; pctx.lineWidth = .8; pctx.stroke();
-      dispatch({ type: 'ADD_PICKED_STROKE', payload: { cx: x, cy: y, r: brush } });
+      dispatch({ type: 'ADD_PICKED_STROKE', payload: { cx: x, cy: y, r: brush, view: view, bounds: { ...secBoundsRef.current } } });
     } else if (tool === 'erase') {
       pctx.globalCompositeOperation = 'destination-out';
       pctx.beginPath(); pctx.arc(x, y, brush*1.5, 0, Math.PI*2);
@@ -1081,7 +1081,7 @@ export default function CanvasEditor() {
     if (editId) {
       dispatch({ type: 'UPDATE_ANNOTATION', id: editId, changes: { text: t } });
     } else {
-      dispatch({ type: 'ADD_ANNOTATION', payload: { id: `note-${Date.now()}`, x, y, text: t } });
+      dispatch({ type: 'ADD_ANNOTATION', payload: { id: `note-${Date.now()}`, x, y, text: t, view: view, bounds: { ...secBoundsRef.current } } });
     }
   }
 

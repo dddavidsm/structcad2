@@ -540,8 +540,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Hormigon intacto en toda la vista frontal
     _fill_gray(msp,_rpts(FX,FY,W,VH))
-    _fill_picado_circles(msp, circles, FX, FY, W, VH, 'frontal')
-    _draw_cracks(msp, cracks, FX, FY, W, VH, 'frontal')
+    _fill_picado_circles(msp, circles, FX, FY, W, VH, 'elevation')
+    _draw_cracks(msp, cracks, FX, FY, W, VH, 'elevation')
     _rect(msp,FX,FY,W,VH,"SECCION",lw=70)
 
     # Lineas de zona inspeccionada
