@@ -45,7 +45,7 @@ export default function ProjectSidebar() {
               <button
                 className="sidebar-delete-btn"
                 title="Eliminar plano"
-                onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PAGINA' }); }}
+                onClick={e => { e.stopPropagation(); dispatch({ type: 'DELETE_PAGINA', payload: pid }); }}
               >✕</button>
             )}
           </li>

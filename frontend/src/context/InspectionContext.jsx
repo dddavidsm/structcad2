@@ -102,9 +102,20 @@ function reducer(state, action) {
       };
     }
     case 'DELETE_PAGINA': {
-      const { [state.paginaActiva]: _omit, ...rest } = state.paginas;
-      const nextId = Object.keys(rest)[0] || null;
-      return { ...state, paginas: rest, paginaActiva: nextId, struct: nextId ? rest[nextId].struct : null, step: nextId ? 2 : 1 };
+      const targetId = action.payload || state.paginaActiva;
+      const { [targetId]: _omit, ...rest } = state.paginas;
+      let nextId = state.paginaActiva;
+      // Si borramos la pestaña en la que estamos, saltamos a otra
+      if (targetId === state.paginaActiva) {
+        nextId = Object.keys(rest)[0] || null;
+      }
+      return {
+        ...state,
+        paginas: rest,
+        paginaActiva: nextId,
+        struct: nextId ? rest[nextId].struct : null,
+        step: nextId ? 2 : 1,
+      };
     }
 
     // ── Datos del plano activo ─────────────────────────────────
@@ -131,15 +142,15 @@ function reducer(state, action) {
       return updatePagina(state, { selectedBars: action.payload });
     case 'ADD_PICKED_STROKE': {
       const base = Array.isArray(pag.pickedStrokes) ? pag.pickedStrokes : [];
-      return updatePagina(state, { pickedStrokes: [...base, action.payload] });
+      return updatePagina(state, { pickedStrokes: [...base, { ...action.payload, view: state.view }] });
     }
     case 'ADD_CRACK': {
       const base = Array.isArray(pag.cracks) ? pag.cracks : [];
-      return updatePagina(state, { cracks: [...base, action.payload] });
+      return updatePagina(state, { cracks: [...base, { ...action.payload, view: state.view }] });
     }
     case 'ADD_ANNOTATION': {
       const base = Array.isArray(pag.annotations) ? pag.annotations : [];
-      return updatePagina(state, { annotations: [...base, action.payload] });
+      return updatePagina(state, { annotations: [...base, { ...action.payload, view: state.view }] });
     }
     case 'UPDATE_ANNOTATION': {
       const base = Array.isArray(pag.annotations) ? pag.annotations : [];
@@ -150,8 +161,16 @@ function reducer(state, action) {
       const base = Array.isArray(pag.annotations) ? pag.annotations : [];
       return updatePagina(state, { annotations: base.filter(a => a.id !== action.id) });
     }
-    case 'CLEAR_CANVAS':
-      return updatePagina(state, { pickedStrokes: [], cracks: [], annotations: [], customStirrups: [], selectedBars: [] });
+    case 'CLEAR_CANVAS': {
+      const v = state.view;
+      return updatePagina(state, {
+        pickedStrokes: (pag.pickedStrokes || []).filter(s => s.view && s.view !== v),
+        cracks:        (pag.cracks        || []).filter(c => c.view && c.view !== v),
+        annotations:   (pag.annotations   || []).filter(a => a.view && a.view !== v),
+        customStirrups: [],
+        selectedBars:   [],
+      });
+    }
 
     // ── UI state ───────────────────────────────────────────────
     case 'SET_VIEW':

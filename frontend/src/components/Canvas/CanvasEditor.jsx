@@ -598,9 +598,15 @@ export default function CanvasEditor() {
   const pagina = state.paginas?.[state.paginaActiva];
   if (!pagina) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
   // Saneamiento seguro de propiedades
-  const pickedStrokes    = Array.isArray(pagina?.pickedStrokes)  ? pagina.pickedStrokes  : [];
-  const cracks           = Array.isArray(pagina?.cracks)         ? pagina.cracks         : [];
-  const annotations      = Array.isArray(pagina?.annotations)    ? pagina.annotations    : [];
+  const { struct, view, tool, brush } = state;
+  // Arrays completos (necesarios para borrado view-aware)
+  const allPickedStrokes = Array.isArray(pagina?.pickedStrokes)  ? pagina.pickedStrokes  : [];
+  const allCracks        = Array.isArray(pagina?.cracks)         ? pagina.cracks         : [];
+  const allAnnotations   = Array.isArray(pagina?.annotations)    ? pagina.annotations    : [];
+  // Arrays filtrados por vista para renderizado
+  const pickedStrokes    = allPickedStrokes.filter(s => !s.view || s.view === view);
+  const cracks           = allCracks.filter(c => !c.view || c.view === view);
+  const annotations      = allAnnotations.filter(a => !a.view || a.view === view);
   const barStatus        = pagina?.barStatus || {};
   const customStirrups   = Array.isArray(pagina?.customStirrups) ? pagina.customStirrups : [];
   const selectedBars     = Array.isArray(pagina?.selectedBars)   ? pagina.selectedBars   : [];
@@ -611,7 +617,6 @@ export default function CanvasEditor() {
   const customStirrupsCount = customStirrups.length;
   const selectedBarsCount   = selectedBars.length;
   const pickedStrokesCount  = pickedStrokes.length;
-  const { struct, view, tool, brush } = state;
 
   const cvRef         = useRef(null);
   const ctxRef        = useRef(null);
@@ -1048,7 +1053,8 @@ export default function CanvasEditor() {
       const erR = brush * 1.5;
       dispatch({
         type: 'SET_PICKED_STROKES',
-        payload: pickedStrokes.filter(s => {
+        payload: allPickedStrokes.filter(s => {
+          if (s.view && s.view !== view) return true; // Mantener pintura de otras vistas
           const dx=s.cx-x, dy=s.cy-y;
           return Math.sqrt(dx*dx+dy*dy) > (erR + s.r) * .7;
         }),
@@ -1066,7 +1072,7 @@ export default function CanvasEditor() {
   }
 
   function handleClear() {
-    pickHistRef.current.push([...pickedStrokes]);
+    pickHistRef.current.push([...allPickedStrokes]);
     dispatch({ type: 'CLEAR_CANVAS' });
   }
 
