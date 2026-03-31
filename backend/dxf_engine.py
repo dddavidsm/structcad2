@@ -290,33 +290,35 @@ def _stirrup(msp, x, y, w, h, rc=0.8, layer="ESTRIBOS"):
     _L(msp,x+w,y+h,x+w+3,y+h+2.5,layer)  # gancho
 
 
-def _draw_u_tie(msp, x_min, x_max, y_min, y_max, diam_cm, layer="ESTRIBOS"):
-    """
-    Grapa en U: abre por arriba (y_max). Dos ganchos descendentes en los extremos superiores.
-    Arcos de curvatura real (rc = BEND_RAD_FACTOR * diam_cm) en las esquinas inferiores.
-    Dibujada como lwpolyline con const_width para un aspecto solido y profesional.
-    """
-    w = x_max - x_min; h = y_max - y_min
-    if w <= 0 or h <= 0:
-        return
-    rc = max(0.3, diam_cm * BEND_RAD_FACTOR)
-    rc = min(rc, w * 0.4, h * 0.4)
+def _draw_u_tie(msp, x_min, x_max, y_min, y_max, diam_cm, cy, layer="ESTRIBOS"):
+    rc = max(0.3, diam_cm * 3)
     cw = max(0.3, diam_cm)
-    hook_d = max(1.0, diam_cm * 4)   # longitud diagonal del gancho (45deg)
-    # Bulge para arco de 90 grados counterclockwise (DXF: centro a la izquierda del viaje)
-    b = math.tan(math.radians(22.5))  # ≈ 0.4142
-    pts = [
-        (x_min + hook_d,  y_max - hook_d,  0),   # punta gancho sup-izq
-        (x_min,           y_max,           0),   # esquina sup-izq
-        (x_min,           y_min + rc,      b),   # pata izq → inicio arco inf-izq
-        (x_min + rc,      y_min,           0),   # tras arco → fondo
-        (x_max - rc,      y_min,           b),   # fondo → inicio arco inf-der
-        (x_max,           y_min + rc,      0),   # tras arco → pata der
-        (x_max,           y_max,           0),   # esquina sup-der
-        (x_max - hook_d,  y_max - hook_d,  0),   # punta gancho sup-der
-    ]
-    msp.add_lwpolyline(pts, format='xyb',
-                       dxfattribs={"layer": layer, "const_width": cw})
+    hook = diam_cm * 4
+    b = 0.4142  # Bulge para 90 grados exactos
+
+    if (y_min + y_max) / 2 < cy:  # Barras en la mitad inferior -> U abre hacia ARRIBA
+        pts = [
+            (x_min + hook, y_max - hook, 0),   # Punta gancho izq
+            (x_min,        y_max,        0),   # Esquina sup izq
+            (x_min,        y_min + rc,   b),   # Inicio curva inf izq (Bulge positivo = CCW)
+            (x_min + rc,   y_min,        0),   # Fin curva inf izq
+            (x_max - rc,   y_min,        b),   # Inicio curva inf der
+            (x_max,        y_min + rc,   0),   # Fin curva inf der
+            (x_max,        y_max,        0),   # Esquina sup der
+            (x_max - hook, y_max - hook, 0),   # Punta gancho der
+        ]
+    else:  # Barras en la mitad superior -> U abre hacia ABAJO
+        pts = [
+            (x_min + hook, y_min + hook, 0),   # Punta gancho izq
+            (x_min,        y_min,        0),   # Esquina inf izq
+            (x_min,        y_max - rc,   -b),  # Inicio curva sup izq (Bulge negativo = CW)
+            (x_min + rc,   y_max,        0),   # Fin curva sup izq
+            (x_max - rc,   y_max,        -b),  # Inicio curva sup der
+            (x_max,        y_max - rc,   0),   # Fin curva sup der
+            (x_max,        y_min,        0),   # Esquina inf der
+            (x_max - hook, y_min + hook, 0),   # Punta gancho der
+        ]
+    msp.add_lwpolyline(pts, format='xyb', dxfattribs={"layer": layer, "const_width": cw})
 
 
 def _draw_professional_tie(msp, p1, p2, stirrup_diam_cm, recub_real_cm,
@@ -407,7 +409,7 @@ def _dim_v(msp, y1, y2, x_c, x_e, label,
     _L(msp,x_c,y1,x_c,y2,layer,lw=9)
     _arw(msp,x_c,y1,"U",sz,layer)
     _arw(msp,x_c,y2,"D",sz,layer)
-    _T(msp, x_c+ht*0.7, (y1+y2)/2, ht, label, layer, TextEntityAlignment.LEFT, 0.0)
+    _T(msp, x_c+ht*1.5, (y1+y2)/2, ht, label, layer, TextEntityAlignment.LEFT, 0.0)
 
 
 # ================================================================
@@ -560,7 +562,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         _draw_u_tie(msp,
                     min(xs) - pad, max(xs) + pad,
                     min(ys) - pad, max(ys) + pad,
-                    ds/10)
+                    ds/10, PY + D/2)
 
     # Cotas
     yc1=PY-10; yc2=PY-18
@@ -576,6 +578,23 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     if nbl>0 and spl_int>0:
         _dim_v(msp,PY+cl,PY+cl+spl_int,xc1,PX+W,f"{spl_int:.1f}",ht=1.8)
     _dim_v(msp,PY+D-cl,PY+D,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
+
+    # Cotas progresivas horizontales (Eje a Eje)
+    yc_prog = PY - 6
+    xs_prog = [PX] + [PX + cf + i*spf for i in range(nbf)] + [PX + W]
+    for i in range(len(xs_prog)-1):
+        dist = xs_prog[i+1] - xs_prog[i]
+        if dist > 0.5:
+            _dim_h(msp, xs_prog[i], xs_prog[i+1], yc_prog, PY, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
+
+    # Cotas progresivas verticales (Eje a Eje)
+    xc_prog = PX - 6
+    ys_bars = sorted(list(set([PY+cl, PY+D-cl] + [PY+cl + i*spl_int for i in range(1, nbl+1)])))
+    ys_prog = [PY] + ys_bars + [PY + D]
+    for i in range(len(ys_prog)-1):
+        dist = ys_prog[i+1] - ys_prog[i]
+        if dist > 0.5:
+            _dim_v(msp, ys_prog[i], ys_prog[i+1], xc_prog, PX, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
     _note(msp,PX+W*.65,PY+D*.7,
           PX+W+32,PY+D*.8,
