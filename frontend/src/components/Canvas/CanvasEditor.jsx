@@ -563,25 +563,85 @@ function drawCustomStirrups(ctx, customStirrups, barPositions) {
   });
 }
 
-// ── Estribos individuales en vistas laterales/sección ─────────────
+// ── Mapeo barId → posición X en vista lateral/elevation ──────────
+function getStirrupXRange(stirrup, sb, p, view) {
+  const barIds = stirrup.barIds || [];
+  if (barIds.length < 1) return null;
+
+  const w  = clamp(p.width || 88, 15, 300);
+  const d  = clamp(p.depth || 68, 15, 300);
+  const cf = clamp(p.cover_front || 5, 1, 12);
+  const cl = clamp(p.cover_lateral || 6, 1, 12);
+  const ds = clamp(p.stirrup_diam || 6, 4, 20);
+  const df = clamp(p.bars_front_diam || 20, 6, 40);
+  const dl = clamp(p.bars_lateral_diam || 20, 6, 40);
+  const nbf = clamp(p.bars_front_count || 5, 2, 16);
+  const nbl = Math.max(0, p.bars_lateral_count || 0);
+
+  const positions = []; // cm a lo largo del eje horizontal de la vista
+
+  if (view === 'lateral') {
+    // Eje horizontal = profundidad (d)
+    const dim = d;
+    const sc  = sb.sw / dim;
+    const spl = nbl > 0 ? (d - 2 * cl) / (nbl + 1) : 0;
+
+    barIds.forEach(id => {
+      const m = id.match(/^(FT|FB|LL|LR)(\d+)$/);
+      if (!m) return;
+      const [, type, ns] = m;
+      const num = parseInt(ns);
+      if (type === 'FT')      positions.push(cl);          // cara frontal → esquina delantera
+      else if (type === 'FB') positions.push(d - cl);       // cara trasera → esquina trasera
+      else if ((type === 'LL' || type === 'LR') && nbl > 0 && num >= 1 && num <= nbl)
+        positions.push(cl + num * spl);                     // intermedias
+    });
+
+    if (!positions.length) return null;
+    const pad = Math.max(df, dl) / 20 + ds / 20 + 0.5;
+    const x1  = sb.ox + Math.max(0, Math.min(...positions) - pad) * sc;
+    const x2  = sb.ox + Math.min(dim, Math.max(...positions) + pad) * sc;
+    return x2 > x1 ? { x1, x2 } : null;
+
+  } else if (view === 'elevation') {
+    // Eje horizontal = ancho (w)
+    const dim = w;
+    const sc  = sb.sw / dim;
+    const spf = nbf > 1 ? (w - 2 * cf) / (nbf - 1) : 0;
+
+    barIds.forEach(id => {
+      const m = id.match(/^(FT|FB|LL|LR)(\d+)$/);
+      if (!m) return;
+      const [, type, ns] = m;
+      const num = parseInt(ns);
+      if (type === 'FT' || type === 'FB') positions.push(cf + (num - 1) * spf);
+      else if (type === 'LL')             positions.push(cf);
+      else if (type === 'LR')             positions.push(w - cf);
+    });
+
+    if (!positions.length) return null;
+    const pad = Math.max(df, dl) / 20 + ds / 20 + 0.5;
+    const x1  = sb.ox + Math.max(0, Math.min(...positions) - pad) * sc;
+    const x2  = sb.ox + Math.min(dim, Math.max(...positions) + pad) * sc;
+    return x2 > x1 ? { x1, x2 } : null;
+  }
+  return null;
+}
+
+// ── Estribos individuales en vistas laterales/elevation ───────────
 function drawCustomStirrupsLateral(ctx, customStirrups, sb, p, view) {
   if (!customStirrups.length) return;
   const ih = clamp(p.inspection_height || 25, 5, 150);
   const VH = ih + 70, marg = 30;
-  // Zona de inspección dentro del sectionBounds
   const yTop = sb.oy + (marg / VH) * sb.sh;
   const yBot = sb.oy + ((VH - marg) / VH) * sb.sh;
-  const cs_val = clamp(p.cover_stirrup != null ? p.cover_stirrup : 3, 1, 12);
-  const dimPx = view === 'lateral' ? (clamp(p.depth || 68, 15, 300)) : (clamp(p.width || 88, 15, 300));
-  const sc = sb.sw / dimPx;
 
   customStirrups.forEach((stirrup, idx) => {
+    const range = getStirrupXRange(stirrup, sb, p, view);
+    if (!range) return;
+    const { x1, x2 } = range;
     const ny = stirrup.ny ?? 0.5;
-    const inset = stirrup.inset ?? 0;
-    const y = yBot - ny * (yBot - yTop); // ny=0 → bottom, ny=1 → top
-    const x1 = sb.ox + (cs_val + inset) * sc;
-    const x2 = sb.ox + sb.sw - (cs_val + inset) * sc;
-    if (x2 <= x1) return;
+    const y  = yBot - ny * (yBot - yTop); // ny=0 → abajo, ny=1 → arriba
 
     // Línea del estribo individual
     ctx.save();
@@ -909,7 +969,10 @@ export default function CanvasEditor() {
     for (let i = customStirrups.length - 1; i >= 0; i--) {
       const ny = customStirrups[i].ny ?? 0.5;
       const sy = yBot - ny * (yBot - yTop);
-      if (Math.abs(y - sy) < 8 && x >= sb.ox - 15 && x <= sb.ox + sb.sw + 40) return i;
+      if (Math.abs(y - sy) < 8) {
+        const range = getStirrupXRange(customStirrups[i], sb, p, view);
+        if (range && x >= range.x1 - 15 && x <= range.x2 + 40) return i;
+      }
     }
     return -1;
   }
@@ -939,8 +1002,8 @@ export default function CanvasEditor() {
     // Cerrar menú contextual de nota al hacer clic en el canvas
     if (activeNoteMenu) setActiveNoteMenu(null);
 
-    // RESTRICCIÓN: bloquear herramientas de barras/estribos en vistas lateral/section de elevación
-    const isElevView = view === 'lateral' || view === 'frontal';
+    // RESTRICCIÓN: bloquear herramientas de barras/estribos en vistas lateral/elevation
+    const isElevView = view === 'lateral' || view === 'elevation';
 
     // Arrastrar estribos individuales en vista lateral/elevation
     if (isElevView) {

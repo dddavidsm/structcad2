@@ -766,15 +766,25 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         if y > zt: break
         _L(msp, LX+cs, y, LX+D-cs, y, "ESTRIBOS", lw=25)
 
-    # Estribos individuales (posicionados por el usuario en la vista lateral)
+    # Estribos individuales — ancho limitado a las barras que rodea
     for tie in cust_stirrups:
         if not isinstance(tie, dict):
             continue
+        tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
-        inset = float(tie.get('inset', 0))
         y_pos = zb + ny * (zt - zb)
-        x1 = LX + cs + inset
-        x2 = LX + D - cs - inset
+        # Calcular rango X a partir de las posiciones de las barras en profundidad
+        depths = []
+        for bid in tie_bar_ids:
+            if bid in bar_id_to_cm_pos:
+                _, by = bar_id_to_cm_pos[bid]
+                depths.append(by - PY)       # profundidad relativa al frente
+        if not depths:
+            continue
+        x1 = LX + min(depths) - pad
+        x2 = LX + max(depths) + pad
+        x1 = max(x1, LX)
+        x2 = min(x2, LX + D)
         if x2 > x1:
             _L(msp, x1, y_pos, x2, y_pos, "ESTRIBOS", lw=35)
 
@@ -822,6 +832,27 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         y = zb_f + i*stirrup_spacing
         if y > zt_f: break
         _L(msp, FX+cs, y, FX+W-cs, y, "ESTRIBOS", lw=25)
+
+    # Estribos individuales en vista frontal — ancho segun barras que rodea
+    for tie in cust_stirrups:
+        if not isinstance(tie, dict):
+            continue
+        tie_bar_ids = tie.get('barIds', [])
+        ny = float(tie.get('ny', 0.5))
+        y_pos = zb_f + ny * (zt_f - zb_f)
+        widths = []
+        for bid in tie_bar_ids:
+            if bid in bar_id_to_cm_pos:
+                bx, _ = bar_id_to_cm_pos[bid]
+                widths.append(bx - PX)      # posicion relativa al borde izq
+        if not widths:
+            continue
+        x1 = FX + min(widths) - pad
+        x2 = FX + max(widths) + pad
+        x1 = max(x1, FX)
+        x2 = min(x2, FX + W)
+        if x2 > x1:
+            _L(msp, x1, y_pos, x2, y_pos, "ESTRIBOS", lw=35)
 
     # Cotas
     yf1=FY-10; yf2=FY-20
