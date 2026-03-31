@@ -48,7 +48,11 @@ export default function InspectionForm() {
       cracks:        Array.isArray(pagina?.cracks)        ? pagina.cracks        : [],
       annotations:   Array.isArray(pagina?.annotations)   ? pagina.annotations   : [],
       customStirrups: Array.isArray(pagina?.customStirrups)
-        ? pagina.customStirrups.map(s => s.barIds || [])
+        ? pagina.customStirrups.map(s =>
+            typeof s === 'object' && !Array.isArray(s)
+              ? { barIds: s.barIds || [], ny: s.ny ?? 0.5, inset: s.inset ?? 0 }
+              : s
+          )
         : [],
     };
     const result = await exportDXF(flatState, onStatus);
@@ -116,6 +120,9 @@ export default function InspectionForm() {
             </div>
           </div>
         ))}
+
+        {/* Sección de estribos individuales (solo en tab armadura) */}
+        {activeTab === 'armadura' && <CustomStirrupsSection />}
       </div>
 
       {/* Boton DXF */}
@@ -130,6 +137,68 @@ export default function InspectionForm() {
            exportMsg?.type==='err'  ? exportMsg.msg  :
            '↓ Generar DXF'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Sección de estribos individuales ───────────────────────────────
+
+function CustomStirrupsSection() {
+  const { state, dispatch } = useInspection();
+  const pagina = state.paginas?.[state.paginaActiva];
+  const customStirrups = Array.isArray(pagina?.customStirrups) ? pagina.customStirrups : [];
+  const ih = parseFloat(pagina?.formValues?.inspection_height) || 25;
+
+  if (!customStirrups.length) return (
+    <div className="form-section">
+      <div className="form-section-title">Estribos individuales</div>
+      <div className="form-fields">
+        <span style={{ color:'#94a3b8', fontSize:12, padding:'4px 0' }}>
+          Usa la herramienta "Sel. Barra" en planta para añadir estribos.
+        </span>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="form-section">
+      <div className="form-section-title">Estribos individuales ({customStirrups.length})</div>
+      <div className="form-fields" style={{ gap: 6 }}>
+        {customStirrups.map((st, i) => (
+          <div key={st.id || i} style={{
+            display:'flex', alignItems:'center', gap:6,
+            padding:'4px 6px', background:'#fef3c7', borderRadius:5, fontSize:12,
+          }}>
+            <strong style={{ color:'#92400e', minWidth:26 }}>E{i+1}</strong>
+            <label style={{ color:'#78350f', fontSize:11 }}>Pos:</label>
+            <span style={{ fontSize:11, color:'#92400e', minWidth:36 }}>
+              {((st.ny ?? 0.5) * ih).toFixed(1)}cm
+            </span>
+            <label style={{ color:'#78350f', fontSize:11 }}>Dist:</label>
+            <input
+              type="number" min={0} max={20} step={0.5}
+              value={st.inset ?? 0}
+              onChange={e => dispatch({
+                type:'UPDATE_CUSTOM_STIRRUP', index:i,
+                changes:{ inset: parseFloat(e.target.value) || 0 }
+              })}
+              style={{ width:48, fontSize:11, padding:'1px 3px', borderRadius:3, border:'1px solid #d6d3d1' }}
+            />
+            <span style={{ fontSize:10, color:'#a8a29e' }}>cm</span>
+            <button
+              onClick={() => dispatch({ type:'DELETE_CUSTOM_STIRRUP', index:i })}
+              style={{
+                marginLeft:'auto', background:'none', border:'none',
+                color:'#dc2626', cursor:'pointer', fontSize:11, padding:'2px 4px',
+              }}
+              title="Eliminar estribo"
+            >✕</button>
+          </div>
+        ))}
+        <span style={{ color:'#a8a29e', fontSize:10, marginTop:2 }}>
+          Arrastra los estribos en la vista lateral para posicionarlos.
+        </span>
       </div>
     </div>
   );

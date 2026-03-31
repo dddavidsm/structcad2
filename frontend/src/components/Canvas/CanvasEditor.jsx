@@ -539,7 +539,7 @@ function drawAnnotations(ctx, annotations, editingId = null) {
   });
 }
 
-// ── Estribos personalizados ───────────────────────────────────────
+// ── Estribos personalizados (sección / planta) ───────────────────
 function drawCustomStirrups(ctx, customStirrups, barPositions) {
   customStirrups.forEach(stirrup => {
     const bars=stirrup.barIds.map(id=>barPositions.find(b=>b.id===id)).filter(Boolean);
@@ -559,6 +559,47 @@ function drawCustomStirrups(ctx, customStirrups, barPositions) {
     ctx.arcTo(x1,y1+bh2,x1,y1+bh2-r,r); ctx.lineTo(x1,y1+r);
     ctx.arcTo(x1,y1,x1+r,y1,r); ctx.closePath();
     ctx.stroke();
+    ctx.restore();
+  });
+}
+
+// ── Estribos individuales en vistas laterales/sección ─────────────
+function drawCustomStirrupsLateral(ctx, customStirrups, sb, p, view) {
+  if (!customStirrups.length) return;
+  const ih = clamp(p.inspection_height || 25, 5, 150);
+  const VH = ih + 70, marg = 30;
+  // Zona de inspección dentro del sectionBounds
+  const yTop = sb.oy + (marg / VH) * sb.sh;
+  const yBot = sb.oy + ((VH - marg) / VH) * sb.sh;
+  const cs_val = clamp(p.cover_stirrup != null ? p.cover_stirrup : 3, 1, 12);
+  const dimPx = view === 'lateral' ? (clamp(p.depth || 68, 15, 300)) : (clamp(p.width || 88, 15, 300));
+  const sc = sb.sw / dimPx;
+
+  customStirrups.forEach((stirrup, idx) => {
+    const ny = stirrup.ny ?? 0.5;
+    const inset = stirrup.inset ?? 0;
+    const y = yBot - ny * (yBot - yTop); // ny=0 → bottom, ny=1 → top
+    const x1 = sb.ox + (cs_val + inset) * sc;
+    const x2 = sb.ox + sb.sw - (cs_val + inset) * sc;
+    if (x2 <= x1) return;
+
+    // Línea del estribo individual
+    ctx.save();
+    ctx.strokeStyle = '#b45309'; ctx.lineWidth = 2.5; ctx.setLineDash([8, 4]);
+    ctx.beginPath(); ctx.moveTo(x1, y); ctx.lineTo(x2, y); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Marcador de arrastre (rombo)
+    const mx = x1 - 8;
+    ctx.fillStyle = '#b45309';
+    ctx.beginPath();
+    ctx.moveTo(mx, y - 5); ctx.lineTo(mx + 5, y); ctx.lineTo(mx, y + 5); ctx.lineTo(mx - 5, y);
+    ctx.closePath(); ctx.fill();
+
+    // Etiqueta con posición
+    const distCm = (ny * ih).toFixed(1);
+    ctx.fillStyle = '#92400e'; ctx.font = `600 9px ${FONT}`; ctx.textAlign = 'left';
+    ctx.fillText(`E${idx + 1}: ${distCm}cm`, x2 + 4, y + 3);
     ctx.restore();
   });
 }
@@ -625,6 +666,7 @@ export default function CanvasEditor() {
   const lastPtRef     = useRef(null);
   const crackPtsRef   = useRef(null);
   const dragAnnRef    = useRef(null); // { id, startX, startY, moved: boolean }
+  const dragStirrupRef = useRef(null); // { index, startY }
   const [cvSize, setCvSize] = useState({ W: 400, H: 328 });
 
   // Zoom / Pan
@@ -798,7 +840,11 @@ export default function CanvasEditor() {
     drawBarsLayer(ctx, bps, barStatus, selectedBars);
 
     // Capa 3b: estribos personalizados
-    drawCustomStirrups(ctx, customStirrups, bps);
+    if (view === 'section') {
+      drawCustomStirrups(ctx, customStirrups, bps);
+    } else if (view === 'lateral' || view === 'elevation') {
+      drawCustomStirrupsLateral(ctx, customStirrups, sb, p, view);
+    }
 
     // Capa 4: fisuras
     drawCracks(ctx, cracks, crackPtsRef.current);
@@ -850,6 +896,24 @@ export default function CanvasEditor() {
     return null;
   }
 
+  function _hitCustomStirrup(x, y) {
+    // Solo en vistas lateral/elevation
+    if (view !== 'lateral' && view !== 'elevation') return -1;
+    if (!customStirrups.length) return -1;
+    const p = getParams();
+    const sb = secBoundsRef.current;
+    const ih = clamp(p.inspection_height || 25, 5, 150);
+    const VH = ih + 70, marg = 30;
+    const yTop = sb.oy + (marg / VH) * sb.sh;
+    const yBot = sb.oy + ((VH - marg) / VH) * sb.sh;
+    for (let i = customStirrups.length - 1; i >= 0; i--) {
+      const ny = customStirrups[i].ny ?? 0.5;
+      const sy = yBot - ny * (yBot - yTop);
+      if (Math.abs(y - sy) < 8 && x >= sb.ox - 15 && x <= sb.ox + sb.sw + 40) return i;
+    }
+    return -1;
+  }
+
   // ── Eventos ─────────────────────────────────────────────────────
   function handlePointerDown(e) {
     e.preventDefault();
@@ -877,6 +941,16 @@ export default function CanvasEditor() {
 
     // RESTRICCIÓN: bloquear herramientas de barras/estribos en vistas lateral/section de elevación
     const isElevView = view === 'lateral' || view === 'frontal';
+
+    // Arrastrar estribos individuales en vista lateral/elevation
+    if (isElevView) {
+      const csIdx = _hitCustomStirrup(x, y);
+      if (csIdx >= 0) {
+        dragStirrupRef.current = { index: csIdx };
+        return;
+      }
+    }
+
     if (isElevView && (tool === 'select-bar')) return;
 
     if (tool === 'annotate' || tool === 'pick') {
@@ -949,6 +1023,20 @@ export default function CanvasEditor() {
 
     const { x, y } = _pos(e);
 
+    // ── Drag estribo individual ──────────────────────────────────
+    if (dragStirrupRef.current) {
+      const p = getParams();
+      const sb = secBoundsRef.current;
+      const ih = clamp(p.inspection_height || 25, 5, 150);
+      const VH = ih + 70, marg = 30;
+      const yTop = sb.oy + (marg / VH) * sb.sh;
+      const yBot = sb.oy + ((VH - marg) / VH) * sb.sh;
+      const newNy = clamp((yBot - y) / (yBot - yTop), 0, 1);
+      dispatch({ type: 'UPDATE_CUSTOM_STIRRUP', index: dragStirrupRef.current.index, changes: { ny: newNy } });
+      fullRedraw();
+      return;
+    }
+
     // ── Drag vs Click de nota ────────────────────────────────────
     if (dragAnnRef.current) {
       const dx = x - dragAnnRef.current.startX;
@@ -996,6 +1084,13 @@ export default function CanvasEditor() {
     // Limpiar cache de punteros
     pointerCacheRef.current = pointerCacheRef.current.filter(p => p.id !== e.pointerId);
     if (pointerCacheRef.current.length < 2) pinchInitRef.current = null;
+
+    // ── Soltar estribo individual ────────────────────────────────
+    if (dragStirrupRef.current) {
+      dragStirrupRef.current = null;
+      fullRedraw();
+      return;
+    }
 
     // ── Drag vs Click: resolver intención al soltar ──────────────
     if (dragAnnRef.current) {

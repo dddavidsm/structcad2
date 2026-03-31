@@ -37,7 +37,7 @@ LAYERS = {
     "HORMIGON": {"color": 8,  "lw":  0},
     "PICADO":   {"color": 30, "lw":  0},
     "ARMADURA": {"color": 250, "lw": 50},
-    "ESTRIBOS": {"color": 7,  "lw": 35},
+    "ESTRIBOS": {"color": 5,  "lw": 35},
     "COTAS":    {"color": 8,  "lw": 13},
     "TEXTO":    {"color": 7,  "lw": 13},
     "CAJETIN":  {"color": 7,  "lw": 18},
@@ -669,7 +669,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # Estribos personalizados — L abierta en esquina o U envolvente segun geometria
     cust_stirrups = list(getattr(data, 'customStirrups', None) or [])
     pad = max(rf, rl) + ds / 20   # radio de barra + semigrosor del estribo
-    for tie_bar_ids in cust_stirrups:
+    for tie in cust_stirrups:
+        # Compatibilidad: acepta tanto lista de IDs como dict {barIds:[...], ny, inset}
+        tie_bar_ids = tie.get('barIds', tie) if isinstance(tie, dict) else tie
         pts = [bar_id_to_cm_pos[bid] for bid in tie_bar_ids if bid in bar_id_to_cm_pos]
         if len(pts) < 2:
             continue
@@ -763,6 +765,18 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         y = zb + i*stirrup_spacing
         if y > zt: break
         _L(msp, LX+cs, y, LX+D-cs, y, "ESTRIBOS", lw=25)
+
+    # Estribos individuales (posicionados por el usuario en la vista lateral)
+    for tie in cust_stirrups:
+        if not isinstance(tie, dict):
+            continue
+        ny = float(tie.get('ny', 0.5))
+        inset = float(tie.get('inset', 0))
+        y_pos = zb + ny * (zt - zb)
+        x1 = LX + cs + inset
+        x2 = LX + D - cs - inset
+        if x2 > x1:
+            _L(msp, x1, y_pos, x2, y_pos, "ESTRIBOS", lw=35)
 
     # Cotas
     _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)

@@ -133,7 +133,26 @@ function reducer(state, action) {
       return updatePagina(state, { customStirrups: action.payload });
     case 'ADD_CUSTOM_STIRRUP': {
       const base = Array.isArray(pag.customStirrups) ? pag.customStirrups : [];
-      return updatePagina(state, { customStirrups: [...base, action.payload] });
+      const newStirrup = {
+        ...action.payload,
+        id: action.payload.id || `cs-${Date.now()}`,
+        ny: action.payload.ny ?? 0.5,
+        inset: action.payload.inset ?? 0,
+      };
+      return updatePagina(state, { customStirrups: [...base, newStirrup] });
+    }
+    case 'UPDATE_CUSTOM_STIRRUP': {
+      const base = Array.isArray(pag.customStirrups) ? pag.customStirrups : [];
+      const updated = base.map((s, i) =>
+        (action.id ? s.id === action.id : i === action.index) ? { ...s, ...action.changes } : s
+      );
+      return updatePagina(state, { customStirrups: updated });
+    }
+    case 'DELETE_CUSTOM_STIRRUP': {
+      const base = Array.isArray(pag.customStirrups) ? pag.customStirrups : [];
+      return updatePagina(state, { customStirrups: base.filter((s, i) =>
+        action.id ? s.id !== action.id : i !== action.index
+      ) });
     }
     case 'CLEAR_CUSTOM_STIRRUPS': {
       return updatePagina(state, { customStirrups: [] });

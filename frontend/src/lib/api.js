@@ -32,7 +32,11 @@ export async function exportDXF(state, onStatus) {
   p.annotations  = (annotations || []).map(a => ({ text: a.text, x: a.x, y: a.y }));
   p.view         = view;
   p.picked_circles = _normalizeStrokes(pickedStrokes || [], sectionBounds);
-  p.customStirrups = allCustomStirrups || [];
+  p.customStirrups = (allCustomStirrups || []).map(s =>
+    typeof s === 'object' && !Array.isArray(s)
+      ? { barIds: s.barIds || [], ny: s.ny ?? 0.5, inset: s.inset ?? 0 }
+      : s
+  );
 
   onStatus('spin', 'Conectando con el servidor…');
   const coldStartTimer = setTimeout(
