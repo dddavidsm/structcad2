@@ -1,19 +1,32 @@
 .canvas-editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   height: 100%;
+  position: relative;
 }
 
 .cv-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  padding: 6px 8px;
-  background: #f1f5f9;
+  padding: 4px 6px;
+  background: rgba(241,245,249,.95);
   border-radius: 8px;
   border: 1px solid #e2e8f0;
+}
+
+@media (max-width: 900px) {
+  .cv-toolbar {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    right: 4px;
+    z-index: 10;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+  }
 }
 
 /* ── Herramientas con icono + label ── */
@@ -23,9 +36,9 @@
 }
 
 .cv-tool-btn {
-  min-width: 56px;
-  height: 46px;       /* mayor área táctil */
-  padding: 0 8px;
+  min-width: 44px;
+  height: 38px;
+  padding: 0 6px;
   border: 1.5px solid #cbd5e1;
   border-radius: 6px;
   background: #fff;
@@ -34,7 +47,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 1px;
   transition: background .15s, border-color .15s;
   white-space: nowrap;
 }
@@ -135,14 +148,15 @@
 /* ── Canvas wrap ── */
 .cv-wrap {
   flex: 1;
-  min-height: 300px;
-  border-radius: 8px;
+  min-height: 200px;
+  border-radius: 6px;
   overflow: hidden;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
   position: relative;
 }
-.cv-wrap canvas { display: block; width: 100%; }
+.cv-wrap canvas { display: block; width: 100%; cursor: grab; }
+.cv-wrap canvas:active { cursor: grabbing; }
 
 /* ── Annotation inline input ── */
 .ann-input-wrap {

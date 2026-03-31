@@ -32,19 +32,6 @@ function BottomNav() {
   );
 }
 
-function WorkspaceBack() {
-  const { state, dispatch } = useInspection();
-  if (state.page !== 'nueva' || state.step !== 2) return null;
-  return (
-    <button
-      className="back-btn"
-      onClick={() => dispatch({ type: 'SET_STEP', payload: 1 })}
-    >
-      ← Cambiar estructura
-    </button>
-  );
-}
-
 export default function App() {
   const { state } = useInspection();
   const { page, step } = state;
@@ -58,7 +45,6 @@ export default function App() {
       <main className="app-main">
         {page === 'nueva' && (
           <>
-            <WorkspaceBack />
             {step === 1 && <StructureSelector />}
             {step === 2 && (
               <ErrorBoundary>

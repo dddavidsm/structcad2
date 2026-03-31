@@ -658,8 +658,10 @@ function drawCustomStirrupsLateral(ctx, customStirrups, sb, p, view) {
 
     // Etiqueta con posición
     const distCm = (ny * ih).toFixed(1);
+    // Etiqueta fuera del plano (borde derecho del sectionBounds)
+    const labelX = sb.ox + sb.sw + 6;
     ctx.fillStyle = '#92400e'; ctx.font = `600 9px ${FONT}`; ctx.textAlign = 'left';
-    ctx.fillText(`E${idx + 1}: ${distCm}cm`, x2 + 4, y + 3);
+    ctx.fillText(`E${idx + 1}: ${distCm}cm`, labelX, y + 3);
     ctx.restore();
   });
 }
@@ -727,6 +729,7 @@ export default function CanvasEditor() {
   const crackPtsRef   = useRef(null);
   const dragAnnRef    = useRef(null); // { id, startX, startY, moved: boolean }
   const dragStirrupRef = useRef(null); // { index, startY }
+  const panDragRef      = useRef(null); // { startRawX, startRawY, initPanX, initPanY }
   const [cvSize, setCvSize] = useState({ W: 400, H: 328 });
 
   // Zoom / Pan
@@ -1048,11 +1051,19 @@ export default function CanvasEditor() {
       return;
     }
 
-    // pick/erase fluye directamente a _paint sin interceptar barras
+    // pick/erase: solo dentro de la zona del plano → pintar; fuera → pan
+    const sb = secBoundsRef.current;
+    const inBounds = x >= sb.ox && x <= sb.ox + sb.sw && y >= sb.oy && y <= sb.oy + sb.sh;
+    if ((tool === 'pick' || tool === 'erase') && inBounds) {
+      drawingRef.current = true;
+      lastPtRef.current = { x, y };
+      _paint(x, y);
+      return;
+    }
 
-    drawingRef.current = true;
-    lastPtRef.current = { x, y };
-    _paint(x, y);
+    // Clic fuera de la zona del plano → iniciar pan
+    const { scale: sc2, panX: px2, panY: py2 } = zoomRef.current;
+    panDragRef.current = { startRawX: raw.x, startRawY: raw.y, initPanX: px2, initPanY: py2 };
   }
 
   function handlePointerMove(e) {
@@ -1114,6 +1125,18 @@ export default function CanvasEditor() {
       return;
     }
 
+    // ── Pan drag ─────────────────────────────────────────────────
+    if (panDragRef.current) {
+      const pd = panDragRef.current;
+      zoomRef.current = {
+        ...zoomRef.current,
+        panX: pd.initPanX + (raw.x - pd.startRawX),
+        panY: pd.initPanY + (raw.y - pd.startRawY),
+      };
+      fullRedraw();
+      return;
+    }
+
     if (!drawingRef.current) {
       if ((tool === 'pick' || tool === 'annotate') && cvRef.current) {
         const hitAnn = _hitAnnotation(x, y);
@@ -1147,6 +1170,12 @@ export default function CanvasEditor() {
     // Limpiar cache de punteros
     pointerCacheRef.current = pointerCacheRef.current.filter(p => p.id !== e.pointerId);
     if (pointerCacheRef.current.length < 2) pinchInitRef.current = null;
+
+    // ── Soltar pan ──────────────────────────────────────────────
+    if (panDragRef.current) {
+      panDragRef.current = null;
+      return;
+    }
 
     // ── Soltar estribo individual ────────────────────────────────
     if (dragStirrupRef.current) {

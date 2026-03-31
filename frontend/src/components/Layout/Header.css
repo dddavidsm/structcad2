@@ -2,8 +2,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  height: 52px;
+  padding: 0 12px;
+  height: 40px;
   background: #1e293b;
   border-bottom: 1px solid #334155;
   position: sticky;
@@ -17,11 +17,11 @@
   gap: 8px;
 }
 .logo-icon {
-  font-size: 22px;
+  font-size: 18px;
   color: #60a5fa;
 }
 .logo-text {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 800;
   color: #f1f5f9;
   letter-spacing: .01em;
