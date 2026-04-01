@@ -12,11 +12,13 @@ export const STRUCTS = {
           { id: 'bars_front_count',  l: 'Nº barras',            u: 'ud', t: 'n', mn: 2,  mx: 16, st: 1,  v: 5  },
           { id: 'bars_front_diam',   l: 'Ø barras',             u: 'mm', t: 'n', mn: 6,  mx: 40, st: 2,  v: 20 },
           { id: 'cover_front',       l: 'Recub. barras frente', u: 'cm', t: 'n', mn: 1,  mx: 12, st: .5, v: 5  },
+          { id: 'spacings_front',    l: 'Sep. irregulares',     t: 'tx', v: '', ph: 'ej: 21, 18, 18, 21  (nbf-1 valores)' },
         ]},
         { s: 'Cara lateral (izq./der.)', f: [
           { id: 'bars_lateral_count', l: 'Nº barras (interm.)',  u: 'ud', t: 'n', mn: 0,  mx: 14, st: 1,  v: 4  },
           { id: 'bars_lateral_diam',  l: 'Ø barras',             u: 'mm', t: 'n', mn: 6,  mx: 40, st: 2,  v: 20 },
           { id: 'cover_lateral',      l: 'Recub. barras lat.',   u: 'cm', t: 'n', mn: 1,  mx: 12, st: .5, v: 6  },
+          { id: 'spacings_lateral',   l: 'Sep. irregulares',     t: 'tx', v: '', ph: 'ej: 15, 14, 14, 15  (nbl valores)' },
         ]},
         { s: 'Estribo perimetral', f: [
           { id: 'stirrup_diam',    l: 'Ø estribo',       u: 'mm', t: 'n', mn: 4, mx: 20, st: 2,  v: 6  },

@@ -70,6 +70,8 @@ class PillarRectData(InspectionBase):
     stirrup_spacing: Optional[float] = 15
     inspection_height: float = Field(..., gt=0)
     customStirrups: Optional[List[Any]] = []  # [{barIds:[...], ny:0.5, inset:0}, ...] o [[id1,id2,...], ...]
+    spacings_front:   Optional[str] = None   # "21,18,18,21" → nbf-1 separaciones cara frontal
+    spacings_lateral: Optional[str] = None   # "15,14,14,15" → nbl separaciones cara lateral
 
 class PillarCircData(InspectionBase):
     diameter: float = Field(..., gt=0)

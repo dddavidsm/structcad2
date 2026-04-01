@@ -207,7 +207,7 @@ function CustomStirrupsSection() {
 // ── Campo de formulario ───────────────────────────────────────────
 
 function FormField({ field, value, onChange }) {
-  const { id, l, u, t, mn, mx, st, opts } = field;
+  const { id, l, u, t, mn, mx, st, opts, ph } = field;
 
   // Estado local para inputs numéricos: permite vaciar y escribir sin fricción
   const [numRaw, setNumRaw] = useState(() =>
@@ -315,6 +315,7 @@ function FormField({ field, value, onChange }) {
         value={value ?? ''}
         onChange={e => onChange(e.target.value)}
         className="field-input"
+        placeholder={ph || ''}
       />
     </div>
   );

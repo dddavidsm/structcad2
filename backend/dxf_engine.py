@@ -130,6 +130,21 @@ def _rpts(x, y, w, h):
     return [(x,y),(x+w,y),(x+w,y+h),(x,y+h)]
 
 
+def _parse_spacings(raw, expected_count):
+    """Convierte "21,18,18,21" en [21.0,18.0,18.0,21.0] si tiene expected_count valores > 0.
+    Devuelve None si el campo está vacío, mal formado o el conteo no coincide.
+    """
+    if not raw:
+        return None
+    try:
+        arr = [float(s.strip()) for s in str(raw).split(',') if s.strip()]
+        if len(arr) == expected_count and all(v > 0 for v in arr):
+            return arr
+    except (ValueError, TypeError):
+        pass
+    return None
+
+
 # ================================================================
 #  RELLENOS
 # ================================================================
@@ -760,6 +775,22 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     rf  = max(.8, df/20)
     rl  = max(.8, dl/20)
 
+    # Separaciones irregulares opcionales (validadas: count debe coincidir exacto)
+    sp_front   = _parse_spacings(getattr(data, 'spacings_front',   None), nbf - 1)
+    sp_lateral = _parse_spacings(getattr(data, 'spacings_lateral', None), nbl)
+
+    def _bx_front(i):
+        """X de la barra frontal i (0-indexed). Usa sep. irregular si válida."""
+        if sp_front:
+            return PX + cf + sum(sp_front[:i])
+        return PX + cf + i * spf
+
+    def _by_lateral(i):
+        """Y de la barra lateral i (1-indexed). Usa sep. irregular si válida."""
+        if sp_lateral:
+            return PY + cl + sum(sp_lateral[:i])
+        return PY + cl + i * spl_int
+
     doc,msp = _make_doc()
 
     # ── 1. SECCION EN PLANTA ──────────────────────────────────────
@@ -782,13 +813,13 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # Barras cara frontal — FT en y=PY+D-cl (arriba en DXF), FB en y=PY+cl (abajo en DXF)
     # Inversión (1-ny): canvas Y=0 (top web) → DXF y grande (top DXF)
     for i in range(nbf):
-        bx = PX + cf + i*spf
+        bx = _bx_front(i)
         _fill_bar(msp, bx, PY+D-cl, rf)   # FT — fila superior en DXF (y grande)
         _fill_bar(msp, bx, PY+cl,   rf)   # FB — fila inferior en DXF (y pequeño)
 
     # Barras cara lateral: SOLO INTERMEDIAS (las esquinas ya estan en cara frontal)
     for i in range(1, nbl+1):
-        by = PY + cl + i*spl_int
+        by = _by_lateral(i)
         _fill_bar(msp, PX+cf,   by, rl)    # columna izquierda
         _fill_bar(msp, PX+W-cf, by, rl)    # columna derecha
 
@@ -796,11 +827,11 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # FT (Front Top web) → y grande en DXF; FB (Front Bottom web) → y pequeño en DXF
     bar_id_to_cm_pos = {}
     for i in range(nbf):
-        bx = PX + cf + i * spf
+        bx = _bx_front(i)
         bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + D - cl)   # arriba en DXF
         bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + cl)        # abajo en DXF
     for i in range(1, nbl + 1):
-        by = PY + cl + i * spl_int
+        by = _by_lateral(i)
         bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by)
         bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by)
 

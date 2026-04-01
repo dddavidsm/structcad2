@@ -19,6 +19,19 @@ function lcg(seed) {
 function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
 function barR(diam, sc)    { return Math.max(3.5, diam / 20 * sc * 0.45); }
 
+/** Convierte "21, 18, 18, 21" → [21,18,18,21] o null si inválido/vacío */
+function parseSpacings(raw) {
+  if (!raw || !String(raw).trim()) return null;
+  const arr = String(raw).split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n) && n > 0);
+  return arr.length ? arr : null;
+}
+/** Posición acumulada: pos = start + sum(spacings[0..i-1]) */
+function accumPos(start, spacings, i) {
+  let pos = start;
+  for (let j = 0; j < i; j++) pos += spacings[j];
+  return pos;
+}
+
 // ── Helpers de dibujo ──────────────────────────────────────────────
 
 function makeDraw(ctx) {
@@ -107,20 +120,27 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const v_cf = cf + estABarra;
   const v_cl = cl + estABarra;
 
-  // ── Barras en sección cenital (solo posiciones → dibujadas como círculos por drawBarsLayer) ──
-  // Cara frontal: nbf barras en borde superior + nbf barras en borde inferior
-  const spf=nbf>1?(w-2*v_cl)/(nbf-1):0;
-  for (let i=0;i<nbf;i++) {
-    const bx=ox+(v_cl+i*spf)*sc;
+  // ── Barras en sección cenital ──
+  // Cara frontal: separaciones uniformes o personalizadas (spacings_front = nbf-1 valores)
+  const spf = nbf>1 ? (w-2*v_cl)/(nbf-1) : 0;
+  const spFront = parseSpacings(p.spacings_front);
+  const useSpFront = spFront && spFront.length === nbf - 1;
+  for (let i=0; i<nbf; i++) {
+    const xPos = useSpFront ? accumPos(v_cl, spFront, i) : v_cl + i*spf;
+    const bx = ox + xPos * sc;
     barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+v_cf*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
     barPositionsOut.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:bx,cy:oy+(d-v_cf)*sc,r:barR(df,sc),diam:df,type:'frontal-bot'});
   }
 
-  // Cara lateral: nbl barras intermedias por cada lado (sin esquinas, esas ya son FB/FT)
+  // Cara lateral: separaciones uniformes o personalizadas (spacings_lateral = nbl valores)
+  // spacings_lateral[0] = gap de esquina a LL1, [k] = gap de LLk a LL(k+1)
   if (nbl>0) {
-    const spl=(d-2*v_cf)/(nbl+1);
-    for (let i=1;i<=nbl;i++) {
-      const by=oy+(v_cf+i*spl)*sc;
+    const spl = (d-2*v_cf)/(nbl+1);
+    const spLat = parseSpacings(p.spacings_lateral);
+    const useSpLat = spLat && spLat.length === nbl;
+    for (let i=1; i<=nbl; i++) {
+      const yPos = useSpLat ? v_cf + accumPos(0, spLat, i) : v_cf + i*spl;
+      const by = oy + yPos * sc;
       barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+v_cl*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
       barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-v_cl)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
     }
