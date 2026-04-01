@@ -779,11 +779,12 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _draw_professional_tie(msp, (PX+cs, PY+cs), (PX+W-cs, PY+D-cs),
                            ds/10, cs, "ESTRIBOS", add_hooks=True)
 
-    # Barras cara frontal (arriba y abajo) — incluyen las 4 barras de esquina
+    # Barras cara frontal — FT en y=PY+D-cl (arriba en DXF), FB en y=PY+cl (abajo en DXF)
+    # Inversión (1-ny): canvas Y=0 (top web) → DXF y grande (top DXF)
     for i in range(nbf):
         bx = PX + cf + i*spf
-        _fill_bar(msp, bx, PY+cl, rf)      # fila superior (y=cl)
-        _fill_bar(msp, bx, PY+D-cl, rf)    # fila inferior (y=D-cl)
+        _fill_bar(msp, bx, PY+D-cl, rf)   # FT — fila superior en DXF (y grande)
+        _fill_bar(msp, bx, PY+cl,   rf)   # FB — fila inferior en DXF (y pequeño)
 
     # Barras cara lateral: SOLO INTERMEDIAS (las esquinas ya estan en cara frontal)
     for i in range(1, nbl+1):
@@ -792,11 +793,12 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         _fill_bar(msp, PX+W-cf, by, rl)    # columna derecha
 
     # Mapa ID -> posicion DXF (cm) en la seccion en planta
+    # FT (Front Top web) → y grande en DXF; FB (Front Bottom web) → y pequeño en DXF
     bar_id_to_cm_pos = {}
     for i in range(nbf):
         bx = PX + cf + i * spf
-        bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + cl)
-        bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + D - cl)
+        bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + D - cl)   # arriba en DXF
+        bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + cl)        # abajo en DXF
     for i in range(1, nbl + 1):
         by = PY + cl + i * spl_int
         bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by)
@@ -911,7 +913,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             continue
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
-        y_pos = zb + ny * (zt - zb)
+        y_pos = zb + (1.0 - ny) * (zt - zb)   # flip Y: canvas top (ny=0) → DXF alto
         # Calcular rango X a partir de las posiciones de las barras en profundidad
         depths = []
         for bid in tie_bar_ids:
@@ -981,7 +983,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             continue
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
-        y_pos = zb_f + ny * (zt_f - zb_f)
+        y_pos = zb_f + (1.0 - ny) * (zt_f - zb_f)   # flip Y: canvas top (ny=0) → DXF alto
         widths = []
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
