@@ -872,20 +872,14 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     yc1=PY-10; yc2=PY-18
     _dim_h(msp,PX,PX+W,yc2,PY,f"{W:.0f}",ht=2.5)
     _dim_h(msp,PX,PX+cf,yc1,PY,f"r={cf:.0f}",ht=1.8)
-    if nbf>1:
-        _first_gap = _front_xs[1] - _front_xs[0]
-        _dim_h(msp,_front_xs[0],_front_xs[1],yc1,PY,f"{_first_gap:.1f}",ht=1.8)
     _dim_h(msp,PX+W-cf,PX+W,yc1,PY,f"r={cf:.0f}",ht=1.8)
 
     xc1=PX+W+12; xc2=PX+W+20
     _dim_v(msp,PY,PY+D,xc2,PX+W,f"{D:.0f}",ht=2.5)
     _dim_v(msp,PY,PY+cl,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
-    if nbl>0 and _lat_ys:
-        _first_lat_gap = _lat_ys[0] - PY - cl
-        _dim_v(msp,PY+cl,_lat_ys[0],xc1,PX+W,f"{_first_lat_gap:.1f}",ht=1.8)
     _dim_v(msp,PY+D-cl,PY+D,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
 
-    # Cotas progresivas horizontales (Eje a Eje)
+    # Cotas progresivas horizontales — gap real entre cada par de barras
     yc_prog = PY - 6
     xs_prog = [PX] + _front_xs + [PX + W]
     for i in range(len(xs_prog)-1):
@@ -893,7 +887,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         if dist > 0.5:
             _dim_h(msp, xs_prog[i], xs_prog[i+1], yc_prog, PY, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
-    # Cotas progresivas verticales (Eje a Eje)
+    # Cotas progresivas verticales — gap real entre cada par de barras
     xc_prog = PX - 6
     ys_bars = sorted(list(set([PY+cl, PY+D-cl] + _lat_ys)))
     ys_prog = [PY] + ys_bars + [PY + D]
@@ -943,14 +937,25 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             bx = LX + cl + i*spl_int
         _draw_thick_vertical_bar(msp, bx, LY+2, LY+VH-2, dl/10)
 
-    # Estribos en zona de inspeccion (REPETIDOS SEGÚN stirrup_spacing)
+    # Posiciones reales de barras en la vista lateral (X relativo a LX)
+    _lat_bar_xs = [LX + cl]  # esquina izquierda
+    for i in range(1, nbl+1):
+        if use_custom_lateral:
+            _lat_bar_xs.append(LX + cl + sum(parsed_lateral[:i]))
+        else:
+            _lat_bar_xs.append(LX + cl + i*spl_int)
+    _lat_bar_xs.append(LX + D - cl)  # esquina derecha
+
+    # Estribos en zona de inspeccion — adaptativos a la primera y última barra
     stirrup_spacing = getattr(data, 'stirrup_spacing', 15)
+    est_x1_lat = _lat_bar_xs[0] - pad
+    est_x2_lat = _lat_bar_xs[-1] + pad
     usable_height = zt - zb
     n_stirrups = int(usable_height // stirrup_spacing) + 1
     for i in range(n_stirrups):
         y = zb + i*stirrup_spacing
         if y > zt: break
-        _L(msp, LX+cs, y, LX+D-cs, y, "ESTRIBOS", lw=25)
+        _L(msp, est_x1_lat, y, est_x2_lat, y, "ESTRIBOS", lw=25)
 
     # Estribos individuales — ancho limitado a las barras que rodea
     for tie in cust_stirrups:
@@ -978,19 +983,14 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _draw_concrete_mask(msp, D, VH, circles_lateral, LX, LY)
     _draw_cracks(msp, cracks, LX, LY, D, VH, 'lateral')
 
-    # Cotas — posiciones reales de barras laterales en esta vista
-    _lat_bxs = []
-    for i in range(1, nbl+1):
-        if use_custom_lateral:
-            _lat_bxs.append(LX + cl + sum(parsed_lateral[:i]))
-        else:
-            _lat_bxs.append(LX + cl + i*spl_int)
-
+    # Cotas progresivas — gap real entre cada par de barras en vista lateral
     _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)
-    _dim_h(msp,LX,LX+cl,LY-18,LY,f"r={cl:.0f} cm",ht=1.8)
-    if nbl>0 and _lat_bxs:
-        _first_lat = _lat_bxs[0] - (LX + cl)
-        _dim_h(msp,LX+cl,_lat_bxs[0],LY-26,LY,f"sep={_first_lat:.1f}",ht=1.8)
+    yc_lat_prog = LY - 6
+    xs_lat_prog = [LX] + _lat_bar_xs + [LX + D]
+    for i in range(len(xs_lat_prog)-1):
+        dist = xs_lat_prog[i+1] - xs_lat_prog[i]
+        if dist > 0.5:
+            _dim_h(msp, xs_lat_prog[i], xs_lat_prog[i+1], yc_lat_prog, LY, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
     xv=LX+D+12
     _dim_v(msp,LY,LY+VH,xv+8,LX+D,f"{VH:.0f} cm",ht=2.0)
@@ -1019,19 +1019,25 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _L(msp,FX,zt_f,FX+W,zt_f,"COTAS",lw=13)
     _L(msp,FX,zb_f,FX+W,zb_f,"COTAS",lw=13)
 
-    # Barras frontales a lo largo de toda la vista (gruesas, solidas)
+    # Posiciones reales de barras en la vista frontal (absolutas)
+    _front_bar_xs = []
     for i in range(nbf):
         if use_custom_front and i > 0:
-            bx = FX + cf + sum(parsed_front[:i])
+            _front_bar_xs.append(FX + cf + sum(parsed_front[:i]))
         else:
-            bx = FX + cf + i * spf
+            _front_bar_xs.append(FX + cf + i * spf)
+
+    # Barras frontales a lo largo de toda la vista (gruesas, solidas)
+    for bx in _front_bar_xs:
         _draw_thick_vertical_bar(msp, bx, FY+2, FY+VH-2, df/10)
 
-    # Estribos en vista frontal (REPETIDOS SEGÚN stirrup_spacing)
+    # Estribos en vista frontal — adaptativos a la primera y última barra
+    est_x1_front = _front_bar_xs[0] - pad
+    est_x2_front = _front_bar_xs[-1] + pad
     for i in range(n_stirrups):
         y = zb_f + i*stirrup_spacing
         if y > zt_f: break
-        _L(msp, FX+cs, y, FX+W-cs, y, "ESTRIBOS", lw=25)
+        _L(msp, est_x1_front, y, est_x2_front, y, "ESTRIBOS", lw=25)
 
     # Estribos individuales en vista frontal — ancho segun barras que rodea
     for tie in cust_stirrups:
@@ -1058,20 +1064,15 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _draw_concrete_mask(msp, W, VH, circles_elevation, FX, FY)
     _draw_cracks(msp, cracks, FX, FY, W, VH, 'elevation')
 
-    # Cotas — posiciones reales de barras frontales en esta vista
-    _front_bxs = []
-    for i in range(nbf):
-        if use_custom_front and i > 0:
-            _front_bxs.append(FX + cf + sum(parsed_front[:i]))
-        else:
-            _front_bxs.append(FX + cf + i * spf)
-
+    # Cotas progresivas — gap real entre cada par de barras en vista frontal
     yf1=FY-10; yf2=FY-20
     _dim_h(msp,FX,FX+W,yf2,FY,f"{W:.0f} cm",ht=2.2)
-    _dim_h(msp,FX,FX+cf,yf1,FY,f"r={cf:.0f} cm",ht=1.8)
-    if nbf>1 and _front_bxs:
-        _first_front = _front_bxs[1] - _front_bxs[0]
-        _dim_h(msp,_front_bxs[0],_front_bxs[1],yf1-10,FY,f"sep={_first_front:.1f}",ht=1.8)
+    yc_front_prog = FY - 6
+    xs_front_prog = [FX] + _front_bar_xs + [FX + W]
+    for i in range(len(xs_front_prog)-1):
+        dist = xs_front_prog[i+1] - xs_front_prog[i]
+        if dist > 0.5:
+            _dim_h(msp, xs_front_prog[i], xs_front_prog[i+1], yc_front_prog, FY, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
     xvf=FX+W+12
     _dim_v(msp,FY,FY+VH,xvf+8,FX+W,f"{VH:.0f} cm",ht=2.0)
