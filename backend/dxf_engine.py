@@ -208,6 +208,10 @@ def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h, target_view='
             r  = nr * min_dim
             if r < 0.2:
                 continue
+            # Clamping: limitar radio y empujar centro para que el círculo no salga del borde
+            r = min(r, struct_w / 2, struct_h / 2)
+            cx = max(px + r, min(px + struct_w - r, cx))
+            cy = max(py + r, min(py + struct_h - r, cy))
             pts = [(cx + r * math.cos(math.radians(i * 360 / n_pts)),
                     cy + r * math.sin(math.radians(i * 360 / n_pts)))
                    for i in range(n_pts)]
@@ -227,6 +231,11 @@ def _draw_cracks(msp, cracks, px, py, struct_w, struct_h, target_view='section')
             y1 = py + (1.0 - ny1) * struct_h
             x2 = px + nx2 * struct_w
             y2 = py + (1.0 - ny2) * struct_h
+            # Clamping: recortar extremos de fisura al borde de la estructura
+            x1 = max(px, min(px + struct_w, x1))
+            y1 = max(py, min(py + struct_h, y1))
+            x2 = max(px, min(px + struct_w, x2))
+            y2 = max(py, min(py + struct_h, y2))
             _wavy_line(msp, x1, y1, x2, y2, amp=1.5, waves=4, layer="FISURAS", lw=30)
         except Exception:
             continue
