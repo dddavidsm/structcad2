@@ -17,6 +17,9 @@ import io
 import math
 import random
 
+from shapely.geometry import Point, MultiPolygon
+from shapely.ops import unary_union
+
 import ezdxf
 from ezdxf.enums import TextEntityAlignment
 
@@ -258,19 +261,12 @@ def _to_dxf_circles(circles, px, py, struct_w, struct_h, target_view='section'):
 
 
 def _cluster_circles(circles):
-    """
-    Reduce cientos de círculos superpuestos a un conjunto representativo no solapado.
-
-    Algoritmo: cuadrícula con celda = 2 × radio_medio.
-    Garantía matemática: círculos en celdas adyacentes tienen centros separados ≥ cell_size
-    y suma de radios ≤ cell_size  →  no se solapan  →  AutoCAD resuelve la paridad sin errores.
-    Cada celda conserva el círculo de mayor radio como representante.
-    """
+    """Agrupa círculos por cuadrícula para controlar la densidad de fragmentos de textura."""
     if not circles:
         return []
     avg_r = sum(r for _, _, r in circles) / len(circles)
     cell = max(avg_r * 2.0, 0.5)
-    grid = {}  # key → [sum_x, sum_y, max_r, count]
+    grid = {}
     for cx, cy, r in circles:
         key = (int(cx / cell), int(cy / cell))
         if key in grid:
@@ -282,17 +278,39 @@ def _cluster_circles(circles):
     return [(g[0] / g[3], g[1] / g[3], g[2]) for g in grid.values()]
 
 
+def _merge_painted_area(circles):
+    """
+    Fusiona todos los círculos pintados en una única geometría continua con Shapely.
+
+    Convierte cada círculo a un polígono aproximado (16 segmentos) y los une con
+    unary_union. El resultado es uno o varios polígonos limpios, sin autointerescciones
+    ni solapamientos, que AutoCAD puede resolver trivialmente con la regla par/impar.
+
+    Returns:
+        Lista de listas de (x, y) — un contorno exterior por componente conectada.
+    """
+    if not circles:
+        return []
+    polys = [Point(cx, cy).buffer(r, resolution=16) for cx, cy, r in circles]
+    merged = unary_union(polys)
+    contours = []
+    geoms = list(merged.geoms) if isinstance(merged, MultiPolygon) else [merged]
+    for geom in geoms:
+        if geom.is_valid and geom.area > 0:
+            contours.append(list(geom.exterior.coords))
+    return contours
+
+
 def _draw_repair_texture(msp, picado_circles):
-    """Dibuja fondo blanco y fragmentos procedurales de hormigón roto en las zonas pintadas."""
+    """Fondo blanco fusionado + fragmentos procedurales de hormigón roto."""
     if not picado_circles:
         return
-    # Fondo blanco (borra el gris de debajo)
-    for cx, cy, r in picado_circles:
+    # Fondo blanco: un único polígono limpio por componente conectada (sin huecos ni solapamientos)
+    for contour in _merge_painted_area(picado_circles):
         h = msp.add_hatch(dxfattribs={"layer": "PICADO"})
         h.set_solid_fill(color=255)
-        path = h.paths.add_edge_path()
-        path.add_arc((cx, cy), r, 0, 360)
-    # Matriz de fragmentos irregulares (efecto salt & pepper) — solo sobre representantes agrupados
+        h.paths.add_polyline_path(contour, is_closed=True)
+    # Fragmentos procedurales (salt & pepper) — densidad controlada por clustering
     for cx, cy, r in _cluster_circles(picado_circles):
         num_fragments = max(1, int(r * 2))
         for _ in range(num_fragments):
@@ -306,11 +324,16 @@ def _draw_repair_texture(msp, picado_circles):
 
 
 def _draw_concrete_mask(msp, struct_w, struct_h, picado_circles, px_base=0, py_base=0):
-    """Hatch gris sólido sobre toda la estructura con agujeros en las zonas de picado (island effect)."""
+    """
+    Hatch gris sólido con agujeros perfectos en las zonas pintadas.
+
+    Usa Shapely para garantizar que cada agujero (island) sea un polígono único,
+    limpio y sin autointerescciones. Con un solo contorno por componente conectada,
+    AutoCAD resuelve la paridad par/impar sin ningún error visual.
+    """
     h = msp.add_hatch(dxfattribs={"layer": "HORMIGON"})
     h.set_solid_fill(color=254)
-    h.dxf.hatch_style = 1  # Outer: unifica todos los agujeros superpuestos sin rellenar sus cruces
-    # Borde exterior (rectángulo de la sección)
+    h.dxf.hatch_style = 0  # Normal (odd/even): exterior lleno, islands vacíos
     rect_pts = [
         (px_base,            py_base),
         (px_base + struct_w, py_base),
@@ -318,12 +341,9 @@ def _draw_concrete_mask(msp, struct_w, struct_h, picado_circles, px_base=0, py_b
         (px_base,            py_base + struct_h),
     ]
     h.paths.add_polyline_path(rect_pts, is_closed=True)
-    # Agujeros (islands): usar representantes agrupados para evitar solapamiento de arcos.
-    # _cluster_circles garantiza que círculos en celdas adyacentes no se cruzan
-    # → AutoCAD resuelve la paridad sin saturarse ni rellenar intersecciones.
-    for cx, cy, r in _cluster_circles(picado_circles):
-        inner = h.paths.add_edge_path()
-        inner.add_arc((cx, cy), r, 0, 360)
+    # Un único contorno fusionado por zona pintada → AutoCAD no tiene intersecciones que resolver
+    for contour in _merge_painted_area(picado_circles):
+        h.paths.add_polyline_path(contour, is_closed=True)
 
 
 def _draw_cracks(msp, cracks, px, py, struct_w, struct_h, target_view='section'):
