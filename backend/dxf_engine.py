@@ -16,6 +16,7 @@ Estilo visual (segun imagenes de referencia):
 import io
 import math
 import random
+import re
 
 from shapely.geometry import Point, MultiPolygon
 from shapely.ops import unary_union
