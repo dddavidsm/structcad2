@@ -785,6 +785,16 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     rf  = max(.8, df/20)
     rl  = max(.8, dl/20)
 
+    # Diámetros individuales por barra: {"FT1": {"diam": 25}, ...}
+    _ib = getattr(data, 'individualBars', None) or {}
+
+    def _bar_diam(bar_id, default_diam):
+        """Devuelve el diámetro individual de una barra o el valor general."""
+        entry = _ib.get(bar_id)
+        if isinstance(entry, dict) and entry.get('diam'):
+            return float(entry['diam'])
+        return default_diam
+
     # Separaciones irregulares: parsear sin validación estricta de conteo
     parsed_front   = _parse_spacings_string(getattr(data, 'spacings_front',   None))
     parsed_lateral = _parse_spacings_string(getattr(data, 'spacings_lateral', None))
@@ -817,8 +827,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             bx = PX + cf + sum(parsed_front[:i])
         else:
             bx = PX + cf + i * spf  # Fallback uniforme
-        _fill_bar(msp, bx, PY+D-cl, rf)   # FT — fila superior en DXF (y grande)
-        _fill_bar(msp, bx, PY+cl,   rf)   # FB — fila inferior en DXF (y pequeño)
+        rft = max(.8, _bar_diam(f"FT{i+1}", df) / 20)
+        rfb = max(.8, _bar_diam(f"FB{i+1}", df) / 20)
+        _fill_bar(msp, bx, PY+D-cl, rft)   # FT — fila superior en DXF (y grande)
+        _fill_bar(msp, bx, PY+cl,   rfb)   # FB — fila inferior en DXF (y pequeño)
 
     # Barras cara lateral: SOLO INTERMEDIAS (las esquinas ya estan en cara frontal)
     for i in range(1, nbl+1):
@@ -826,20 +838,22 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             by = PY + cl + sum(parsed_lateral[:i])
         else:
             by = PY + cl + i * spl_int  # Fallback uniforme
-        _fill_bar(msp, PX+cf,   by, rl)    # columna izquierda
-        _fill_bar(msp, PX+W-cf, by, rl)    # columna derecha
+        rll = max(.8, _bar_diam(f"LL{i}", dl) / 20)
+        rlr = max(.8, _bar_diam(f"LR{i}", dl) / 20)
+        _fill_bar(msp, PX+cf,   by, rll)    # columna izquierda
+        _fill_bar(msp, PX+W-cf, by, rlr)    # columna derecha
 
-    # Mapa ID -> posicion DXF (cm) en la seccion en planta
+    # Mapa ID -> (x, y, diam) en la seccion en planta
     # FT (Front Top web) → y grande en DXF; FB (Front Bottom web) → y pequeño en DXF
     bar_id_to_cm_pos = {}
     for i in range(nbf):
         bx = PX + cf + sum(parsed_front[:i]) if use_custom_front and i > 0 else PX + cf + i * spf
-        bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + D - cl)   # arriba en DXF
-        bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + cl)        # abajo en DXF
+        bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + D - cl, _bar_diam(f"FT{i+1}", df))
+        bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + cl,     _bar_diam(f"FB{i+1}", df))
     for i in range(1, nbl + 1):
         by = PY + cl + sum(parsed_lateral[:i]) if use_custom_lateral else PY + cl + i * spl_int
-        bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by)
-        bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by)
+        bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by, _bar_diam(f"LL{i}", dl))
+        bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by, _bar_diam(f"LR{i}", dl))
 
     # Estribos personalizados — L abierta en esquina o U envolvente segun geometria
     cust_stirrups = list(getattr(data, 'customStirrups', None) or [])
@@ -896,9 +910,20 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         if dist > 0.5:
             _dim_v(msp, ys_prog[i], ys_prog[i+1], xc_prog, PX, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
+    # Leyenda dinámica: agrupa barras por diámetro
+    def _bar_summary(prefix_list, default_diam):
+        from collections import Counter
+        diams = [_bar_diam(bid, default_diam) for bid in prefix_list]
+        counts = Counter(diams)
+        if len(counts) == 1:
+            d, n = next(iter(counts.items()))
+            return f"{n} %%c{d:.0f}mm"
+        return " + ".join(f"{n}%%c{d:.0f}" for d, n in sorted(counts.items()))
+
+    _front_ids = [f"FT{i+1}" for i in range(nbf)]
     _note(msp,PX+W*.65,PY+D*.7,
           PX+W+32,PY+D*.8,
-          [f"{nbf} Barras %%c{df:.0f}mm",
+          [_bar_summary(_front_ids, df) + " front.",
            f"Estribo %%c{ds:.0f}mm"])
 
     _T(msp,PX-16,PY+D/2,2.5,"LATERAL","TEXTO",
@@ -925,9 +950,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _L(msp,LX,zt,LX+D,zt,"COTAS",lw=13)
     _L(msp,LX,zb,LX+D,zb,"COTAS",lw=13)
 
-    # Barras de ESQUINA (compartidas con la cara frontal), diametro df
-    _draw_thick_vertical_bar(msp, LX+cl,   LY+2, LY+VH-2, df/10)
-    _draw_thick_vertical_bar(msp, LX+D-cl, LY+2, LY+VH-2, df/10)
+    # Barras de ESQUINA (compartidas con la cara frontal), diametro individual o df
+    _draw_thick_vertical_bar(msp, LX+cl,   LY+2, LY+VH-2, _bar_diam("FT1", df)/10)
+    _draw_thick_vertical_bar(msp, LX+D-cl, LY+2, LY+VH-2, _bar_diam(f"FT{nbf}", df)/10)
 
     # Barras laterales INTERMEDIAS (solo las nbl intermedias, no las esquinas)
     for i in range(1, nbl+1):
@@ -935,7 +960,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             bx = LX + cl + sum(parsed_lateral[:i])
         else:
             bx = LX + cl + i*spl_int
-        _draw_thick_vertical_bar(msp, bx, LY+2, LY+VH-2, dl/10)
+        _draw_thick_vertical_bar(msp, bx, LY+2, LY+VH-2, _bar_diam(f"LL{i}", dl)/10)
 
     # Posiciones reales de barras en la vista lateral (X relativo a LX)
     _lat_bar_xs = [LX + cl]  # esquina izquierda
@@ -968,7 +993,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         depths = []
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
-                _, by = bar_id_to_cm_pos[bid]
+                _, by, _ = bar_id_to_cm_pos[bid]
                 depths.append(by - PY)       # profundidad relativa al frente
         if not depths:
             continue
@@ -998,9 +1023,11 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _dim_v(msp,LY,LY+marg,xv+16,LX+D,f"{marg:.0f} cm",ht=1.8)
 
     n_lat_total = nbl + 2  # intermedias + 2 esquinas
+    _corner_ids = ["FT1", f"FT{nbf}"]
+    _lat_ids = [f"LL{i}" for i in range(1, nbl+1)]
     _note(msp,LX,(zt+zb)/2,LX-40,(zt+zb)/2+5,
-          [f"2 %%c{df:.0f}mm esquina",
-           f"{nbl} %%c{dl:.0f}mm lat. interm.",
+          [_bar_summary(_corner_ids, df) + " esquina",
+           _bar_summary(_lat_ids, dl) + " lat. int." if nbl > 0 else "",
            f"Total: {n_lat_total} barras/cara",
            f"Est. %%c{ds:.0f}mm  r={cs:.0f}cm"])
     _title(msp,LX+D/2,LY-32,"VISTA LATERAL")
@@ -1028,8 +1055,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             _front_bar_xs.append(FX + cf + i * spf)
 
     # Barras frontales a lo largo de toda la vista (gruesas, solidas)
-    for bx in _front_bar_xs:
-        _draw_thick_vertical_bar(msp, bx, FY+2, FY+VH-2, df/10)
+    for idx, bx in enumerate(_front_bar_xs):
+        _draw_thick_vertical_bar(msp, bx, FY+2, FY+VH-2, _bar_diam(f"FT{idx+1}", df)/10)
 
     # Estribos en vista frontal — adaptativos a la primera y última barra
     est_x1_front = _front_bar_xs[0] - pad
@@ -1049,7 +1076,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         widths = []
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
-                bx, _ = bar_id_to_cm_pos[bid]
+                bx, _, _ = bar_id_to_cm_pos[bid]
                 widths.append(bx - PX)      # posicion relativa al borde izq
         if not widths:
             continue
@@ -1080,7 +1107,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     _note(msp,FX+W*.65,zt_f-ih*.3,
           FX+W+30,zt_f+5,
-          [f"{nbf} %%c{df:.0f}mm cara front.",
+          [_bar_summary(_front_ids, df) + " cara front.",
            f"Est. %%c{ds:.0f}mm  r={cf:.0f}/{cs:.0f}cm"])
     _title(msp,FX+W/2,FY-32,"VISTA FRONTAL")
 

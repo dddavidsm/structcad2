@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from pathlib import Path
 import io
 
@@ -72,6 +72,7 @@ class PillarRectData(InspectionBase):
     customStirrups: Optional[List[Any]] = []  # [{barIds:[...], ny:0.5, inset:0}, ...] o [[id1,id2,...], ...]
     spacings_front:   Optional[str] = None   # "21,18,18,21" → nbf-1 separaciones cara frontal
     spacings_lateral: Optional[str] = None   # "15,14,14,15" → nbl separaciones cara lateral
+    individualBars: Optional[Dict[str, Any]] = {}  # {"FT1": {"diam": 25}, ...} diámetros individuales
 
 class PillarCircData(InspectionBase):
     diameter: float = Field(..., gt=0)

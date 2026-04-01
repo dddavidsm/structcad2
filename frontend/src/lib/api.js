@@ -17,7 +17,8 @@ export function warmupServer() {
  */
 export async function exportDXF(state, onStatus) {
   const { struct, formValues, barPositions, barStatus, cracks, annotations,
-          view, pickedStrokes, sectionBounds, customStirrups: allCustomStirrups } = state;
+          view, pickedStrokes, sectionBounds, customStirrups: allCustomStirrups,
+          individualBars } = state;
 
   const def = STRUCTS[struct];
   if (!struct || !def) {
@@ -37,6 +38,7 @@ export async function exportDXF(state, onStatus) {
       ? { barIds: s.barIds || [], ny: s.ny ?? 0.5, inset: s.inset ?? 0 }
       : s
   );
+  p.individualBars = individualBars || {};
 
   onStatus('spin', 'Conectando con el servidor…');
   const coldStartTimer = setTimeout(

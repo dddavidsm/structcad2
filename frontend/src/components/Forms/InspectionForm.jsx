@@ -54,6 +54,7 @@ export default function InspectionForm() {
               : s
           )
         : [],
+      individualBars: pagina?.individualBars || {},
     };
     const result = await exportDXF(flatState, onStatus);
     if (result?.ok) {
@@ -123,6 +124,9 @@ export default function InspectionForm() {
 
         {/* Sección de estribos individuales (solo en tab armadura) */}
         {activeTab === 'armadura' && <CustomStirrupsSection />}
+
+        {/* Propiedades de barra seleccionada (solo en tab armadura) */}
+        {activeTab === 'armadura' && <SelectedBarSection />}
       </div>
 
       {/* Boton DXF */}
@@ -199,6 +203,68 @@ function CustomStirrupsSection() {
         <span style={{ color:'#a8a29e', fontSize:10, marginTop:2 }}>
           Arrastra los estribos en la vista lateral para posicionarlos.
         </span>
+      </div>
+    </div>
+  );
+}
+
+// ── Propiedades de barra seleccionada ─────────────────────────────
+
+const DIAM_OPTIONS = [6,8,10,12,14,16,20,25,32,40];
+
+function SelectedBarSection() {
+  const { state, dispatch } = useInspection();
+  const pagina = state.paginas?.[state.paginaActiva];
+  const selectedBars = Array.isArray(pagina?.selectedBars) ? pagina.selectedBars : [];
+  const individualBars = pagina?.individualBars || {};
+  const formValues = pagina?.formValues || {};
+
+  if (selectedBars.length !== 1) return null;
+
+  const barId = selectedBars[0];
+  const isFront = /^F[TB]\d+$/.test(barId);
+  const defaultDiam = isFront
+    ? (formValues.bars_front_diam || 20)
+    : (formValues.bars_lateral_diam || 20);
+  const currentDiam = individualBars[barId]?.diam || defaultDiam;
+
+  return (
+    <div className="form-section">
+      <div className="form-section-title">Barra seleccionada: {barId}</div>
+      <div className="form-fields" style={{ gap: 6 }}>
+        <div style={{
+          display:'flex', alignItems:'center', gap:8,
+          padding:'4px 6px', background:'#dbeafe', borderRadius:5, fontSize:12,
+        }}>
+          <label style={{ color:'#1e40af', fontSize:11, fontWeight:600 }}>Ø individual</label>
+          <select
+            value={currentDiam}
+            onChange={e => dispatch({
+              type: 'SET_INDIVIDUAL_BAR',
+              barId,
+              props: { diam: parseFloat(e.target.value) }
+            })}
+            style={{ fontSize:12, padding:'2px 4px', borderRadius:3, border:'1px solid #93c5fd' }}
+          >
+            {DIAM_OPTIONS.map(d => (
+              <option key={d} value={d}>{d} mm{d === defaultDiam ? ' (general)' : ''}</option>
+            ))}
+          </select>
+          {currentDiam !== defaultDiam && (
+            <button
+              onClick={() => dispatch({
+                type: 'SET_INDIVIDUAL_BAR',
+                barId,
+                props: { diam: null }
+              })}
+              style={{
+                marginLeft:'auto', background:'none', border:'none',
+                color:'#2563eb', cursor:'pointer', fontSize:10, padding:'2px 4px',
+                textDecoration:'underline',
+              }}
+            >Restablecer</button>
+          )}
+        </div>
       </div>
     </div>
   );

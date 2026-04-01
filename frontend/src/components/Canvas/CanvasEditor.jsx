@@ -125,13 +125,16 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const spf = nbf>1 ? (w-2*v_cl)/(nbf-1) : 0;
   const spFront = parseSpacings(p.spacings_front);
   const useSpFront = spFront && spFront.length === nbf - 1;
+  const ib = p.individualBars || {};
   const frontBXs = [];
   for (let i=0; i<nbf; i++) {
     const xPos = useSpFront ? accumPos(v_cl, spFront, i) : v_cl + i*spf;
     const bx = ox + xPos * sc;
     frontBXs.push(bx);
-    barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+v_cf*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
-    barPositionsOut.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:bx,cy:oy+(d-v_cf)*sc,r:barR(df,sc),diam:df,type:'frontal-bot'});
+    const ftId=`FT${i+1}`, fbId=`FB${i+1}`;
+    const dft=ib[ftId]?.diam||df, dfb=ib[fbId]?.diam||df;
+    barPositionsOut.push({id:ftId,label:ftId,cx:bx,cy:oy+v_cf*sc,r:barR(dft,sc),diam:dft,type:'frontal-top'});
+    barPositionsOut.push({id:fbId,label:fbId,cx:bx,cy:oy+(d-v_cf)*sc,r:barR(dfb,sc),diam:dfb,type:'frontal-bot'});
   }
 
   // Cara lateral: separaciones uniformes o personalizadas (spacings_lateral = nbl valores)
@@ -145,8 +148,10 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
       const yPos = useSpLat ? v_cf + accumPos(0, spLat, i) : v_cf + i*spl;
       const by = oy + yPos * sc;
       latBYs.push(by);
-      barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+v_cl*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
-      barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-v_cl)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
+      const llId=`LL${i}`, lrId=`LR${i}`;
+      const dll=ib[llId]?.diam||dl, dlr=ib[lrId]?.diam||dl;
+      barPositionsOut.push({id:llId,label:llId,cx:ox+v_cl*sc,cy:by,r:barR(dll,sc),diam:dll,type:'lateral-left'});
+      barPositionsOut.push({id:lrId,label:lrId,cx:ox+(w-v_cl)*sc,cy:by,r:barR(dlr,sc),diam:dlr,type:'lateral-right'});
     }
   }
 
@@ -378,10 +383,12 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   const spFrontElev = parseSpacings(p.spacings_front);
   const useSpFrontElev = spFrontElev && spFrontElev.length === nbf - 1;
+  const ibE = p.individualBars || {};
   for(let i=0;i<nbf;i++){
     const xPos = useSpFrontElev ? accumPos(cf, spFrontElev, i) : cf + i*spf;
     const bx=ox+xPos*sc;
-    ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.5,df/16*sc*.4); ctx.setLineDash([]);
+    const bDiam = ibE[`FT${i+1}`]?.diam || df;
+    ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.5,bDiam/16*sc*.4); ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
 
@@ -435,19 +442,24 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
 
   // Barras de ESQUINA (compartidas con la cara frontal)
-  const cornerMidY = oy+VH*sc*.5;
+  const ibL = p.individualBars || {};
+  const dCorner1 = ibL['FT1']?.diam || df;
+  const dCornerN = ibL[`FT${clamp(p.bars_front_count||5,2,16)}`]?.diam || df;
+  ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1,dCorner1/16*sc*.3);
   ctx.beginPath(); ctx.moveTo(ox+cl*sc,oy+marg*sc); ctx.lineTo(ox+cl*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.lineWidth=Math.max(1,dCornerN/16*sc*.3);
   ctx.beginPath(); ctx.moveTo(ox+(d-cl)*sc,oy+marg*sc); ctx.lineTo(ox+(d-cl)*sc,oy+(VH-marg)*sc); ctx.stroke();
 
   // Barras INTERMEDIAS (solo las nbl que introduce el usuario, sin esquinas)
   if (nbl>0) {
-    ctx.strokeStyle='#2563eb'; ctx.lineWidth=Math.max(1,dl/16*sc*.3);
     const spl=(d-2*cl)/(nbl+1);
     const spLatElev = parseSpacings(p.spacings_lateral);
     const useSpLatElev = spLatElev && spLatElev.length === nbl;
     for(let i=1;i<=nbl;i++){
       const xPos = useSpLatElev ? cl + accumPos(0, spLatElev, i) : cl + i*spl;
       const bx=ox+xPos*sc;
+      const bDiamL = ibL[`LL${i}`]?.diam || dl;
+      ctx.strokeStyle='#2563eb'; ctx.lineWidth=Math.max(1,bDiamL/16*sc*.3);
       ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
     }
   }
@@ -502,14 +514,15 @@ function drawFrontalPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   ctx.beginPath(); ctx.moveTo(ox,oy+(VH-marg)*sc); ctx.lineTo(ox+w*sc,oy+(VH-marg)*sc); ctx.stroke();
   ctx.setLineDash([]);
 
-  const lw=Math.max(1,ds/16*sc*.3);
-  ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
+  const ibF = p.individualBars || {};
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
   const spFrontFront = parseSpacings(p.spacings_front);
   const useSpFrontFront = spFrontFront && spFrontFront.length === nbf - 1;
   for(let i=0;i<nbf;i++){
     const xPos = useSpFrontFront ? accumPos(cf, spFrontFront, i) : cf + i*spf;
     const bx=ox+xPos*sc;
+    const bDiamF = ibF[`FT${i+1}`]?.diam || df;
+    ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1,bDiamF/16*sc*.3);
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
   // Estribos — adaptativos a posición real de barras

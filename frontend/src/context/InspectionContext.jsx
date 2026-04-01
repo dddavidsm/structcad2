@@ -54,6 +54,7 @@ function reducer(state, action) {
         annotations:   [],
         customStirrups:[],
         selectedBars:  [],
+        individualBars:{},
       };
       return {
         ...state,
@@ -159,6 +160,12 @@ function reducer(state, action) {
     }
     case 'SET_SELECTED_BARS':
       return updatePagina(state, { selectedBars: action.payload });
+    case 'SET_INDIVIDUAL_BAR': {
+      const prev = pag.individualBars || {};
+      return updatePagina(state, {
+        individualBars: { ...prev, [action.barId]: { ...(prev[action.barId] || {}), ...action.props } }
+      });
+    }
     case 'ADD_PICKED_STROKE': {
       const base = Array.isArray(pag.pickedStrokes) ? pag.pickedStrokes : [];
       return updatePagina(state, { pickedStrokes: [...base, { ...action.payload, view: state.view }] });
@@ -236,7 +243,9 @@ export function InspectionProvider({ children }) {
 
   const getParams = useCallback(() => {
     const pag = state.paginas?.[state.paginaActiva];
-    return getParamsFromValues(state.struct, pag?.formValues || {});
+    const p = getParamsFromValues(state.struct, pag?.formValues || {});
+    p.individualBars = pag?.individualBars || {};
+    return p;
   }, [state.struct, state.paginas, state.paginaActiva]);
 
   return (
