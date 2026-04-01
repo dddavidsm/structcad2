@@ -385,10 +385,11 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
 
-  // Estribos repetidos — arrancan en la base y suben con paso sps
-  // estABarra reduce el ancho del estribo visual a ambos lados
+  // Estribos repetidos — adaptativos a posición real de barras
   const yTop=oy+marg*sc, yBot=oy+(VH-marg)*sc;
-  const ex1=ox+cs*sc+estABarra*sc, ex2=ox+(w-cs)*sc-estABarra*sc;
+  const firstBarXe=cf, lastBarXe=useSpFrontElev?accumPos(cf,spFrontElev,nbf-1):cf+(nbf-1)*spf;
+  const padElev=df/20+ds/20;
+  const ex1=ox+(firstBarXe-padElev)*sc, ex2=ox+(lastBarXe+padElev)*sc;
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
   for (let y=yBot, n=0; y>=yTop-0.5 && n<60; y-=sps*sc, n++) {
     ctx.beginPath(); ctx.moveTo(ex1,y); ctx.lineTo(ex2,y); ctx.stroke();
@@ -451,10 +452,13 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     }
   }
 
-  // Estribos repetidos a intervalos sps (igual que en alzado frontal)
+  // Estribos repetidos — adaptativos a posición real de barras
   const sps = clamp(p.stirrup_spacing||15,5,50);
   const yTop = oy+marg*sc, yBot = oy+(VH-marg)*sc;
-  const ex1 = ox+cs*sc+estABarra*sc, ex2 = ox+(d-cs)*sc-estABarra*sc;
+  const allBarXsLat = [cl, d-cl];
+  if (nbl>0) { const spl=(d-2*cl)/(nbl+1); const spLatElev=parseSpacings(p.spacings_lateral); const useSpLatElev=spLatElev&&spLatElev.length===nbl; for(let i=1;i<=nbl;i++) allBarXsLat.push(useSpLatElev?cl+accumPos(0,spLatElev,i):cl+i*spl); }
+  const padLat = Math.max(df/20,dl/20)+ds/20;
+  const ex1 = ox+(Math.min(...allBarXsLat)-padLat)*sc, ex2 = ox+(Math.max(...allBarXsLat)+padLat)*sc;
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
   for (let y=yBot, n=0; y>=yTop-0.5 && n<60; y-=sps*sc, n++) {
     ctx.beginPath(); ctx.moveTo(ex1,y); ctx.lineTo(ex2,y); ctx.stroke();
@@ -508,10 +512,13 @@ function drawFrontalPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     const bx=ox+xPos*sc;
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
-  // Estribos
+  // Estribos — adaptativos a posición real de barras
+  const firstBarXf=cf, lastBarXf=useSpFrontFront?accumPos(cf,spFrontFront,nbf-1):cf+(nbf-1)*spf;
+  const padFront=df/20+ds/20;
+  const estX1f=ox+(firstBarXf-padFront)*sc, estX2f=ox+(lastBarXf+padFront)*sc;
   ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
-  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+marg*sc); ctx.lineTo(ox+(w-cs)*sc,oy+marg*sc); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(ox+cs*sc,oy+(VH-marg)*sc); ctx.lineTo(ox+(w-cs)*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(estX1f,oy+marg*sc); ctx.lineTo(estX2f,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(estX1f,oy+(VH-marg)*sc); ctx.lineTo(estX2f,oy+(VH-marg)*sc); ctx.stroke();
   ctx.setLineDash([]);
 
   dimH(ox,ox+w*sc,oy-20,`${w} cm`);
