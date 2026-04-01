@@ -1030,13 +1030,17 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
         y_pos = zt - ny * ih   # ny=0 → tope zona insp.; ny=1 → base zona insp.
-        # Calcular rango X con pad individual por barra
+        # CONTRATO GEOMETRICO ALZADO LATERAL:
+        # El eje X del alzado lateral proyecta la coordenada Y de la planta.
+        # TOP de la planta (PY+D) -> IZQUIERDA del alzado (LX, origen)
+        # BOTTOM de la planta (PY) -> DERECHA del alzado (LX+D)
+        # => dist_x = (PY + D) - by   [formula definitiva, no invertir]
         depth_data = []
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
                 _, by, bd = bar_id_to_cm_pos[bid]
-                # Distancia desde el TOP del pilar: plan top (PY+D) -> LX (izq lateral)
-                depth_data.append((PY + D - by, bd / 20 + half_st))
+                dist_x = (PY + D) - by   # mapeo correcto: y_plan_grande -> x_dxf_pequeno
+                depth_data.append((dist_x, bd / 20 + half_st))
         if not depth_data:
             continue
         d_min = min(depth_data, key=lambda v: v[0])
@@ -1121,12 +1125,16 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
         y_pos = zt_f - ny * ih   # ny=0 → tope zona insp.; ny=1 → base zona insp.
-        # Calcular rango X con pad individual por barra
+        # CONTRATO GEOMETRICO ALZADO FRONTAL:
+        # El eje X del alzado frontal proyecta directamente la coordenada X de la planta.
+        # IZQUIERDA planta (PX) -> IZQUIERDA alzado (FX)
+        # => dist_x = bx - PX   [formula definitiva, no invertir]
         width_data = []
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
                 bx, _, bd = bar_id_to_cm_pos[bid]
-                width_data.append((bx - PX, bd / 20 + half_st))
+                dist_x = bx - PX   # mapeo correcto: x_plan - origen_plan -> x_dxf
+                width_data.append((dist_x, bd / 20 + half_st))
         if not width_data:
             continue
         w_min = min(width_data, key=lambda v: v[0])
