@@ -969,8 +969,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
                 PX+W+32, PY+D*.8,
                 _sec_note_lines)
 
-    _T(msp,PX-16,PY+D/2,2.5,"LATERAL","TEXTO",
-       TextEntityAlignment.CENTER,90.0)
+    _T(msp, PX+W/2, PY+D+21, 2.2, "LATERAL", "TEXTO",
+       TextEntityAlignment.CENTER, 0.0)
     _T(msp,PX+W/2,PY-30,2.5,"FRONTAL","TEXTO",
        TextEntityAlignment.CENTER)
     _title(msp,PX+W/2,PY+D+10,"SECCION EN PLANTA")
@@ -1015,15 +1015,13 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _lat_bar_xs.append(LX + D - cl)  # esquina derecha
 
     # Estribos en zona de inspeccion — adaptativos a la primera y última barra
-    stirrup_spacing = getattr(data, 'stirrup_spacing', 15)
+    stirrup_spacing = max(1.0, float(getattr(data, 'stirrup_spacing', None) or 15))
     est_x1_lat = _lat_bar_xs[0] - pad
     est_x2_lat = _lat_bar_xs[-1] + pad
-    usable_height = zt - zb
-    n_stirrups = int(usable_height // stirrup_spacing) + 1
-    for i in range(n_stirrups):
-        y = zb + i*stirrup_spacing
-        if y > zt: break
-        _L(msp, est_x1_lat, y, est_x2_lat, y, "ESTRIBOS", lw=25)
+    y_s = zb
+    while y_s <= zt + 0.001:
+        _L(msp, est_x1_lat, y_s, est_x2_lat, y_s, "ESTRIBOS", lw=25)
+        y_s += stirrup_spacing
 
     # Estribos individuales — ancho limitado a las barras que rodea
     for tie in cust_stirrups:
@@ -1055,7 +1053,6 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _draw_cracks(msp, cracks, LX, LY, D, VH, 'lateral')
 
     # Cotas progresivas — gap real entre cada par de barras en vista lateral
-    _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)
     yc_lat_prog = LY - 6
     xs_lat_prog = [LX] + _lat_bar_xs + [LX + D]
     for i in range(len(xs_lat_prog)-1):
@@ -1067,7 +1064,6 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     xv = LX+D+10
     _dim_v(msp, zb, zt,      xv,    LX+D, f"insp={ih:.0f}cm", ht=2.0)
     _dim_v(msp, LY, LY+marg, xv+14, LX+D, f"{marg:.0f}cm",    ht=1.8)
-    _dim_v(msp, LY, LY+VH,   xv+28, LX+D, f"{VH:.0f}cm",      ht=2.0)
 
     n_lat_total = nbl + 2  # intermedias + 2 esquinas
     _corner_ids = ["FT1", f"FT{nbf}"]
@@ -1113,10 +1109,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # Estribos en vista frontal — adaptativos a la primera y última barra
     est_x1_front = _front_bar_xs[0] - pad
     est_x2_front = _front_bar_xs[-1] + pad
-    for i in range(n_stirrups):
-        y = zb_f + i*stirrup_spacing
-        if y > zt_f: break
-        _L(msp, est_x1_front, y, est_x2_front, y, "ESTRIBOS", lw=25)
+    y_sf = zb_f
+    while y_sf <= zt_f + 0.001:
+        _L(msp, est_x1_front, y_sf, est_x2_front, y_sf, "ESTRIBOS", lw=25)
+        y_sf += stirrup_spacing
 
     # Estribos individuales en vista frontal — ancho segun barras que rodea
     for tie in cust_stirrups:
@@ -1158,15 +1154,14 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Cotas frontales — separacion aumentada (FASE 3)
     xvf = FX+W+10
-    _dim_v(msp, zb_f, zt_f, xvf,    FX+W, f"insp={ih:.0f}cm", ht=2.0)
-    _dim_v(msp, FY, FY+VH,  xvf+16, FX+W, f"{VH:.0f}cm",      ht=2.0)
+    _dim_v(msp, zb_f, zt_f, xvf, FX+W, f"insp={ih:.0f}cm", ht=2.0)
 
     _front_note_lines = ["Vista Frontal:"]
     _front_note_lines.append(f"- {_bar_summary(_front_ids, df)} cara front.")
     _front_note_lines.append(f"- Est. %%c{ds:.0f}mm  r={cf:.0f}/{cs:.0f}cm")
-    # Punta en el borde exterior derecho de la vista frontal
-    _note_mtext(msp, FX+W+1, zt_f-ih*.3,
-                FX+W+32, zt_f+5,
+    # Punta en el borde exterior izquierdo de la vista frontal
+    _note_mtext(msp, FX-1, zt_f-ih*.3,
+                FX-38, zt_f+5,
                 _front_note_lines)
     _title(msp,FX+W/2,FY-32,"VISTA FRONTAL")
 
