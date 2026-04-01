@@ -284,7 +284,7 @@ def _draw_concrete_mask(msp, struct_w, struct_h, picado_circles, px_base=0, py_b
     """Hatch gris sólido sobre toda la estructura con agujeros en las zonas de picado (island effect)."""
     h = msp.add_hatch(dxfattribs={"layer": "HORMIGON"})
     h.set_solid_fill(color=254)
-    h.dxf.hatch_style = 0  # Normal: rellena exterior, deja vacíos los islands interiores
+    h.dxf.hatch_style = 1  # Outer: unifica todos los agujeros superpuestos sin rellenar sus cruces
     # Borde exterior (rectángulo de la sección)
     rect_pts = [
         (px_base,            py_base),
