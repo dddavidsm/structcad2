@@ -643,6 +643,12 @@ function getStirrupXRange(stirrup, sb, p, view) {
   const nbf = clamp(p.bars_front_count || 5, 2, 16);
   const nbl = Math.max(0, p.bars_lateral_count || 0);
 
+  // Spacings personalizados (misma lógica que las barras verticales)
+  const spFront = parseSpacings(p.spacings_front);
+  const useCustomFront = spFront && spFront.length === nbf - 1;
+  const spLat   = parseSpacings(p.spacings_lateral);
+  const useCustomLat = spLat && spLat.length === nbl;
+
   const positions = []; // cm a lo largo del eje horizontal de la vista
 
   if (view === 'lateral') {
@@ -656,10 +662,10 @@ function getStirrupXRange(stirrup, sb, p, view) {
       if (!m) return;
       const [, type, ns] = m;
       const num = parseInt(ns);
-      if (type === 'FT')      positions.push(cl);          // cara frontal → esquina delantera
-      else if (type === 'FB') positions.push(d - cl);       // cara trasera → esquina trasera
+      if (type === 'FT')      positions.push(cl);
+      else if (type === 'FB') positions.push(d - cl);
       else if ((type === 'LL' || type === 'LR') && nbl > 0 && num >= 1 && num <= nbl)
-        positions.push(cl + num * spl);                     // intermedias
+        positions.push(useCustomLat ? cl + accumPos(0, spLat, num) : cl + num * spl);
     });
 
     if (!positions.length) return null;
@@ -679,7 +685,8 @@ function getStirrupXRange(stirrup, sb, p, view) {
       if (!m) return;
       const [, type, ns] = m;
       const num = parseInt(ns);
-      if (type === 'FT' || type === 'FB') positions.push(cf + (num - 1) * spf);
+      if (type === 'FT' || type === 'FB')
+        positions.push(useCustomFront && num > 1 ? accumPos(cf, spFront, num - 1) : cf + (num - 1) * spf);
       else if (type === 'LL')             positions.push(cf);
       else if (type === 'LR')             positions.push(w - cf);
     });
