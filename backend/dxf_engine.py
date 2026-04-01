@@ -969,8 +969,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
                 PX+W+32, PY+D*.8,
                 _sec_note_lines)
 
-    _T(msp, PX+W/2, PY+D+21, 2.2, "LATERAL", "TEXTO",
-       TextEntityAlignment.CENTER, 0.0)
+    _T(msp, PX-35, PY+D/2, 2.2, "LATERAL", "TEXTO",
+       TextEntityAlignment.CENTER, 90.0)
     _T(msp,PX+W/2,PY-30,2.5,"FRONTAL","TEXTO",
        TextEntityAlignment.CENTER)
     _title(msp,PX+W/2,PY+D+10,"SECCION EN PLANTA")
@@ -1029,7 +1029,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             continue
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
-        y_pos = zb + (1.0 - ny) * (zt - zb)   # flip Y: canvas top (ny=0) → DXF alto
+        y_pos = zt - ny * ih   # ny=0 → tope zona insp.; ny=1 → base zona insp.
         # Calcular rango X con pad individual por barra
         depth_data = []
         for bid in tie_bar_ids:
@@ -1120,7 +1120,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             continue
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
-        y_pos = zb_f + (1.0 - ny) * (zt_f - zb_f)   # flip Y: canvas top (ny=0) → DXF alto
+        y_pos = zt_f - ny * ih   # ny=0 → tope zona insp.; ny=1 → base zona insp.
         # Calcular rango X con pad individual por barra
         width_data = []
         for bid in tie_bar_ids:
