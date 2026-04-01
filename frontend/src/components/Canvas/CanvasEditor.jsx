@@ -376,8 +376,11 @@ function drawElevationPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut)
 
   // Barras longitudinales como líneas verticales
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
+  const spFrontElev = parseSpacings(p.spacings_front);
+  const useSpFrontElev = spFrontElev && spFrontElev.length === nbf - 1;
   for(let i=0;i<nbf;i++){
-    const bx=ox+(cf+i*spf)*sc;
+    const xPos = useSpFrontElev ? accumPos(cf, spFrontElev, i) : cf + i*spf;
+    const bx=ox+xPos*sc;
     ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.5,df/16*sc*.4); ctx.setLineDash([]);
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
@@ -439,8 +442,11 @@ function drawLateralPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   if (nbl>0) {
     ctx.strokeStyle='#2563eb'; ctx.lineWidth=Math.max(1,dl/16*sc*.3);
     const spl=(d-2*cl)/(nbl+1);
+    const spLatElev = parseSpacings(p.spacings_lateral);
+    const useSpLatElev = spLatElev && spLatElev.length === nbl;
     for(let i=1;i<=nbl;i++){
-      const bx=ox+(cl+i*spl)*sc;
+      const xPos = useSpLatElev ? cl + accumPos(0, spLatElev, i) : cl + i*spl;
+      const bx=ox+xPos*sc;
       ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
     }
   }
@@ -495,8 +501,11 @@ function drawFrontalPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const lw=Math.max(1,ds/16*sc*.3);
   ctx.strokeStyle='#155e27'; ctx.lineWidth=lw;
   const spf=nbf>1?(w-2*cf)/(nbf-1):0;
+  const spFrontFront = parseSpacings(p.spacings_front);
+  const useSpFrontFront = spFrontFront && spFrontFront.length === nbf - 1;
   for(let i=0;i<nbf;i++){
-    const bx=ox+(cf+i*spf)*sc;
+    const xPos = useSpFrontFront ? accumPos(cf, spFrontFront, i) : cf + i*spf;
+    const bx=ox+xPos*sc;
     ctx.beginPath(); ctx.moveTo(bx,oy+marg*sc); ctx.lineTo(bx,oy+(VH-marg)*sc); ctx.stroke();
   }
   // Estribos

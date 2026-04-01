@@ -865,24 +865,29 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _draw_concrete_mask(msp, W, D, circles_section, PX, PY)
     _draw_cracks(msp, cracks, PX, PY, W, D, 'section')
 
-    # Cotas
+    # Cotas — usar posiciones reales de barras (custom o uniforme)
+    _front_xs = [bar_id_to_cm_pos[f"FT{i+1}"][0] for i in range(nbf)]
+    _lat_ys   = sorted([bar_id_to_cm_pos[f"LL{i}"][1] for i in range(1, nbl+1)]) if nbl > 0 else []
+
     yc1=PY-10; yc2=PY-18
     _dim_h(msp,PX,PX+W,yc2,PY,f"{W:.0f}",ht=2.5)
     _dim_h(msp,PX,PX+cf,yc1,PY,f"r={cf:.0f}",ht=1.8)
-    if nbf>1 and spf>0:
-        _dim_h(msp,PX+cf,PX+cf+spf,yc1,PY,f"{spf:.1f}",ht=1.8)
+    if nbf>1:
+        _first_gap = _front_xs[1] - _front_xs[0]
+        _dim_h(msp,_front_xs[0],_front_xs[1],yc1,PY,f"{_first_gap:.1f}",ht=1.8)
     _dim_h(msp,PX+W-cf,PX+W,yc1,PY,f"r={cf:.0f}",ht=1.8)
 
     xc1=PX+W+12; xc2=PX+W+20
     _dim_v(msp,PY,PY+D,xc2,PX+W,f"{D:.0f}",ht=2.5)
     _dim_v(msp,PY,PY+cl,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
-    if nbl>0 and spl_int>0:
-        _dim_v(msp,PY+cl,PY+cl+spl_int,xc1,PX+W,f"{spl_int:.1f}",ht=1.8)
+    if nbl>0 and _lat_ys:
+        _first_lat_gap = _lat_ys[0] - PY - cl
+        _dim_v(msp,PY+cl,_lat_ys[0],xc1,PX+W,f"{_first_lat_gap:.1f}",ht=1.8)
     _dim_v(msp,PY+D-cl,PY+D,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
 
     # Cotas progresivas horizontales (Eje a Eje)
     yc_prog = PY - 6
-    xs_prog = [PX] + [PX + cf + i*spf for i in range(nbf)] + [PX + W]
+    xs_prog = [PX] + _front_xs + [PX + W]
     for i in range(len(xs_prog)-1):
         dist = xs_prog[i+1] - xs_prog[i]
         if dist > 0.5:
@@ -890,7 +895,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Cotas progresivas verticales (Eje a Eje)
     xc_prog = PX - 6
-    ys_bars = sorted(list(set([PY+cl, PY+D-cl] + [PY+cl + i*spl_int for i in range(1, nbl+1)])))
+    ys_bars = sorted(list(set([PY+cl, PY+D-cl] + _lat_ys)))
     ys_prog = [PY] + ys_bars + [PY + D]
     for i in range(len(ys_prog)-1):
         dist = ys_prog[i+1] - ys_prog[i]
@@ -932,7 +937,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Barras laterales INTERMEDIAS (solo las nbl intermedias, no las esquinas)
     for i in range(1, nbl+1):
-        bx = LX + cl + i*spl_int
+        if use_custom_lateral:
+            bx = LX + cl + sum(parsed_lateral[:i])
+        else:
+            bx = LX + cl + i*spl_int
         _draw_thick_vertical_bar(msp, bx, LY+2, LY+VH-2, dl/10)
 
     # Estribos en zona de inspeccion (REPETIDOS SEGÚN stirrup_spacing)
@@ -970,11 +978,19 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _draw_concrete_mask(msp, D, VH, circles_lateral, LX, LY)
     _draw_cracks(msp, cracks, LX, LY, D, VH, 'lateral')
 
-    # Cotas
+    # Cotas — posiciones reales de barras laterales en esta vista
+    _lat_bxs = []
+    for i in range(1, nbl+1):
+        if use_custom_lateral:
+            _lat_bxs.append(LX + cl + sum(parsed_lateral[:i]))
+        else:
+            _lat_bxs.append(LX + cl + i*spl_int)
+
     _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)
     _dim_h(msp,LX,LX+cl,LY-18,LY,f"r={cl:.0f} cm",ht=1.8)
-    if nbl>0 and spl_int>0:
-        _dim_h(msp,LX+cl,LX+cl+spl_int,LY-26,LY,f"sep={spl_int:.1f}",ht=1.8)
+    if nbl>0 and _lat_bxs:
+        _first_lat = _lat_bxs[0] - (LX + cl)
+        _dim_h(msp,LX+cl,_lat_bxs[0],LY-26,LY,f"sep={_first_lat:.1f}",ht=1.8)
 
     xv=LX+D+12
     _dim_v(msp,LY,LY+VH,xv+8,LX+D,f"{VH:.0f} cm",ht=2.0)
@@ -1005,7 +1021,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Barras frontales a lo largo de toda la vista (gruesas, solidas)
     for i in range(nbf):
-        bx = FX + cf + i*spf
+        if use_custom_front and i > 0:
+            bx = FX + cf + sum(parsed_front[:i])
+        else:
+            bx = FX + cf + i * spf
         _draw_thick_vertical_bar(msp, bx, FY+2, FY+VH-2, df/10)
 
     # Estribos en vista frontal (REPETIDOS SEGÚN stirrup_spacing)
@@ -1039,12 +1058,20 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _draw_concrete_mask(msp, W, VH, circles_elevation, FX, FY)
     _draw_cracks(msp, cracks, FX, FY, W, VH, 'elevation')
 
-    # Cotas
+    # Cotas — posiciones reales de barras frontales en esta vista
+    _front_bxs = []
+    for i in range(nbf):
+        if use_custom_front and i > 0:
+            _front_bxs.append(FX + cf + sum(parsed_front[:i]))
+        else:
+            _front_bxs.append(FX + cf + i * spf)
+
     yf1=FY-10; yf2=FY-20
     _dim_h(msp,FX,FX+W,yf2,FY,f"{W:.0f} cm",ht=2.2)
     _dim_h(msp,FX,FX+cf,yf1,FY,f"r={cf:.0f} cm",ht=1.8)
-    if nbf>1 and spf>0:
-        _dim_h(msp,FX+cf,FX+cf+spf,yf1-10,FY,f"sep={spf:.0f} cm",ht=1.8)
+    if nbf>1 and _front_bxs:
+        _first_front = _front_bxs[1] - _front_bxs[0]
+        _dim_h(msp,_front_bxs[0],_front_bxs[1],yf1-10,FY,f"sep={_first_front:.1f}",ht=1.8)
 
     xvf=FX+W+12
     _dim_v(msp,FY,FY+VH,xvf+8,FX+W,f"{VH:.0f} cm",ht=2.0)
