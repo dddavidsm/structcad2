@@ -1023,6 +1023,22 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         _L(msp, est_x1_lat, y_s, est_x2_lat, y_s, "ESTRIBOS", lw=25)
         y_s += stirrup_spacing
 
+    # Mapeo X estricto para alzado lateral (debe replicar el canvas, sin espejo)
+    def _dist_x_lateral_cm(bar_id):
+        m = re.match(r'^(FT|FB|LL|LR)(\d+)$', str(bar_id))
+        if not m:
+            return None
+        typ, ns = m.group(1), int(m.group(2))
+        if typ == "FT":
+            return cl
+        if typ == "FB":
+            return D - cl
+        if typ in ("LL", "LR") and 1 <= ns <= nbl:
+            if use_custom_lateral:
+                return cl + sum(parsed_lateral[:ns])
+            return cl + ns * spl_int
+        return None
+
     # Estribos individuales — ancho limitado a las barras que rodea
     for tie in cust_stirrups:
         if not isinstance(tie, dict):
@@ -1037,10 +1053,14 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         # => dist_x = (PY + D) - by   [formula definitiva, no invertir]
         depth_data = []
         for bid in tie_bar_ids:
+            dist_x = _dist_x_lateral_cm(bid)
+            if dist_x is None:
+                continue
             if bid in bar_id_to_cm_pos:
-                _, by, bd = bar_id_to_cm_pos[bid]
-                dist_x = (PY + D) - by   # mapeo correcto: y_plan_grande -> x_dxf_pequeno
-                depth_data.append((dist_x, bd / 20 + half_st))
+                bd = bar_id_to_cm_pos[bid][2]
+            else:
+                bd = _bar_diam(bid, df if str(bid).startswith(("FT", "FB")) else dl)
+            depth_data.append((dist_x, bd / 20 + half_st))
         if not depth_data:
             continue
         d_min = min(depth_data, key=lambda v: v[0])
@@ -1118,6 +1138,22 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         _L(msp, est_x1_front, y_sf, est_x2_front, y_sf, "ESTRIBOS", lw=25)
         y_sf += stirrup_spacing
 
+    # Mapeo X estricto para alzado frontal (debe replicar el canvas, sin espejo)
+    def _dist_x_frontal_cm(bar_id):
+        m = re.match(r'^(FT|FB|LL|LR)(\d+)$', str(bar_id))
+        if not m:
+            return None
+        typ, ns = m.group(1), int(m.group(2))
+        if typ in ("FT", "FB") and 1 <= ns <= nbf:
+            if use_custom_front and ns > 1:
+                return cf + sum(parsed_front[:ns - 1])
+            return cf + (ns - 1) * spf
+        if typ == "LL":
+            return cf
+        if typ == "LR":
+            return W - cf
+        return None
+
     # Estribos individuales en vista frontal — ancho segun barras que rodea
     for tie in cust_stirrups:
         if not isinstance(tie, dict):
@@ -1131,10 +1167,14 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         # => dist_x = bx - PX   [formula definitiva, no invertir]
         width_data = []
         for bid in tie_bar_ids:
+            dist_x = _dist_x_frontal_cm(bid)
+            if dist_x is None:
+                continue
             if bid in bar_id_to_cm_pos:
-                bx, _, bd = bar_id_to_cm_pos[bid]
-                dist_x = bx - PX   # mapeo correcto: x_plan - origen_plan -> x_dxf
-                width_data.append((dist_x, bd / 20 + half_st))
+                bd = bar_id_to_cm_pos[bid][2]
+            else:
+                bd = _bar_diam(bid, df if str(bid).startswith(("FT", "FB")) else dl)
+            width_data.append((dist_x, bd / 20 + half_st))
         if not width_data:
             continue
         w_min = min(width_data, key=lambda v: v[0])
