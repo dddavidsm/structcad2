@@ -145,6 +145,16 @@ def _parse_spacings(raw, expected_count):
     return None
 
 
+def _parse_spacings_string(raw_str):
+    """Convierte "21, 18, 18, 16" -> [21.0, 18.0, 18.0, 16.0]. Retorna lista vacía si falla."""
+    if not raw_str or not isinstance(raw_str, str):
+        return []
+    try:
+        return [float(s.strip()) for s in raw_str.split(',') if s.strip()]
+    except ValueError:
+        return []
+
+
 # ================================================================
 #  RELLENOS
 # ================================================================
@@ -775,22 +785,11 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     rf  = max(.8, df/20)
     rl  = max(.8, dl/20)
 
-    # Separaciones irregulares opcionales (validadas: count debe coincidir exacto)
-    sp_front   = _parse_spacings(getattr(data, 'spacings_front',   None), nbf - 1)
-    sp_lateral = _parse_spacings(getattr(data, 'spacings_lateral', None), nbl)
-
-    def _bx_front(i):
-        """X de la barra frontal i (0-indexed). Usa sep. irregular si válida."""
-        if sp_front:
-            return PX + cf + sum(sp_front[:i])
-        return PX + cf + i * spf
-
-    def _by_lateral(i):
-        """Y de la barra lateral i (1-indexed). Usa sep. irregular si válida.
-        Calculado desde ARRIBA hacia abajo para coincidir con IDs del Canvas (LL1 = top)."""
-        if sp_lateral:
-            return PY + D - cl - sum(sp_lateral[:i])
-        return PY + D - cl - i * spl_int
+    # Separaciones irregulares: parsear sin validación estricta de conteo
+    parsed_front   = _parse_spacings_string(getattr(data, 'spacings_front',   None))
+    parsed_lateral = _parse_spacings_string(getattr(data, 'spacings_lateral', None))
+    use_custom_front   = len(parsed_front)   == (nbf - 1)
+    use_custom_lateral = len(parsed_lateral) == nbl
 
     doc,msp = _make_doc()
 
@@ -812,15 +811,21 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
                            ds/10, cs, "ESTRIBOS", add_hooks=True)
 
     # Barras cara frontal — FT en y=PY+D-cl (arriba en DXF), FB en y=PY+cl (abajo en DXF)
-    # Inversión (1-ny): canvas Y=0 (top web) → DXF y grande (top DXF)
+    # Lógica dinámica: usar separaciones personalizadas acumuladas o cálculo uniforme
     for i in range(nbf):
-        bx = _bx_front(i)
+        if use_custom_front and i > 0:
+            bx = PX + cf + sum(parsed_front[:i])
+        else:
+            bx = PX + cf + i * spf  # Fallback uniforme
         _fill_bar(msp, bx, PY+D-cl, rf)   # FT — fila superior en DXF (y grande)
         _fill_bar(msp, bx, PY+cl,   rf)   # FB — fila inferior en DXF (y pequeño)
 
     # Barras cara lateral: SOLO INTERMEDIAS (las esquinas ya estan en cara frontal)
     for i in range(1, nbl+1):
-        by = _by_lateral(i)
+        if use_custom_lateral:
+            by = PY + cl + sum(parsed_lateral[:i])
+        else:
+            by = PY + cl + i * spl_int  # Fallback uniforme
         _fill_bar(msp, PX+cf,   by, rl)    # columna izquierda
         _fill_bar(msp, PX+W-cf, by, rl)    # columna derecha
 
@@ -828,11 +833,11 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # FT (Front Top web) → y grande en DXF; FB (Front Bottom web) → y pequeño en DXF
     bar_id_to_cm_pos = {}
     for i in range(nbf):
-        bx = _bx_front(i)
+        bx = PX + cf + sum(parsed_front[:i]) if use_custom_front and i > 0 else PX + cf + i * spf
         bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + D - cl)   # arriba en DXF
         bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + cl)        # abajo en DXF
     for i in range(1, nbl + 1):
-        by = _by_lateral(i)
+        by = PY + cl + sum(parsed_lateral[:i]) if use_custom_lateral else PY + cl + i * spl_int
         bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by)
         bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by)
 
