@@ -516,9 +516,10 @@ def _dim_h(msp, x1, x2, y_c, y_e, label,
     _L(msp,x2,y_e,x2,ye,layer,lw=9)
     # linea cota
     _L(msp,x1,y_c,x2,y_c,layer,lw=9)
-    # flechas
-    _arw(msp,x1,y_c,"R",sz,layer)
-    _arw(msp,x2,y_c,"L",sz,layer)
+    # marcas arquitectonicas diagonales (tick)
+    tick = sz * 0.6
+    _L(msp, x1 - tick, y_c - tick, x1 + tick, y_c + tick, layer, lw=15)
+    _L(msp, x2 - tick, y_c - tick, x2 + tick, y_c + tick, layer, lw=15)
     # texto
     ty = y_c+ht*.55 if y_c < y_e else y_c-ht*1.1
     _T(msp,(x1+x2)/2,ty,ht,label,layer,TextEntityAlignment.CENTER)
@@ -532,8 +533,10 @@ def _dim_v(msp, y1, y2, x_c, x_e, label,
     _L(msp,x_e,y1,xe,y1,layer,lw=9)
     _L(msp,x_e,y2,xe,y2,layer,lw=9)
     _L(msp,x_c,y1,x_c,y2,layer,lw=9)
-    _arw(msp,x_c,y1,"U",sz,layer)
-    _arw(msp,x_c,y2,"D",sz,layer)
+    # marcas arquitectonicas diagonales (tick)
+    tick = sz * 0.6
+    _L(msp, x_c - tick, y1 - tick, x_c + tick, y1 + tick, layer, lw=15)
+    _L(msp, x_c - tick, y2 - tick, x_c + tick, y2 + tick, layer, lw=15)
     _T(msp, x_c+ht*1.5, (y1+y2)/2, ht, label, layer, TextEntityAlignment.LEFT, 0.0)
 
 
