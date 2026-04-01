@@ -166,6 +166,14 @@ function reducer(state, action) {
         individualBars: { ...prev, [action.barId]: { ...(prev[action.barId] || {}), ...action.props } }
       });
     }
+    case 'SET_INDIVIDUAL_BARS_BATCH': {
+      const prev2 = pag.individualBars || {};
+      const updated = { ...prev2 };
+      for (const bid of action.barIds) {
+        updated[bid] = { ...(updated[bid] || {}), ...action.props };
+      }
+      return updatePagina(state, { individualBars: updated });
+    }
     case 'ADD_PICKED_STROKE': {
       const base = Array.isArray(pag.pickedStrokes) ? pag.pickedStrokes : [];
       return updatePagina(state, { pickedStrokes: [...base, { ...action.payload, view: state.view }] });

@@ -219,18 +219,26 @@ function SelectedBarSection() {
   const individualBars = pagina?.individualBars || {};
   const formValues = pagina?.formValues || {};
 
-  if (selectedBars.length !== 1) return null;
+  if (selectedBars.length === 0) return null;
 
-  const barId = selectedBars[0];
-  const isFront = /^F[TB]\d+$/.test(barId);
-  const defaultDiam = isFront
+  const getDefault = (barId) => /^F[TB]\d+$/.test(barId)
     ? (formValues.bars_front_diam || 20)
     : (formValues.bars_lateral_diam || 20);
-  const currentDiam = individualBars[barId]?.diam || defaultDiam;
+
+  const diams = selectedBars.map(id => individualBars[id]?.diam || getDefault(id));
+  const allSame = diams.every(d => d === diams[0]);
+  const commonDiam = allSame ? diams[0] : null;
+  const anyCustom = selectedBars.some(id =>
+    (individualBars[id]?.diam || getDefault(id)) !== getDefault(id)
+  );
+
+  const title = selectedBars.length === 1
+    ? `Barra seleccionada: ${selectedBars[0]}`
+    : `Barras seleccionadas: ${selectedBars.join(', ')}`;
 
   return (
     <div className="form-section">
-      <div className="form-section-title">Barra seleccionada: {barId}</div>
+      <div className="form-section-title">{title}</div>
       <div className="form-fields" style={{ gap: 6 }}>
         <div style={{
           display:'flex', alignItems:'center', gap:8,
@@ -238,23 +246,24 @@ function SelectedBarSection() {
         }}>
           <label style={{ color:'#1e40af', fontSize:11, fontWeight:600 }}>Ø individual</label>
           <select
-            value={currentDiam}
+            value={commonDiam ?? ''}
             onChange={e => dispatch({
-              type: 'SET_INDIVIDUAL_BAR',
-              barId,
+              type: 'SET_INDIVIDUAL_BARS_BATCH',
+              barIds: selectedBars,
               props: { diam: parseFloat(e.target.value) }
             })}
             style={{ fontSize:12, padding:'2px 4px', borderRadius:3, border:'1px solid #93c5fd' }}
           >
+            {commonDiam === null && <option value="">— mixto —</option>}
             {DIAM_OPTIONS.map(d => (
-              <option key={d} value={d}>{d} mm{d === defaultDiam ? ' (general)' : ''}</option>
+              <option key={d} value={d}>{d} mm</option>
             ))}
           </select>
-          {currentDiam !== defaultDiam && (
+          {anyCustom && (
             <button
               onClick={() => dispatch({
-                type: 'SET_INDIVIDUAL_BAR',
-                barId,
+                type: 'SET_INDIVIDUAL_BARS_BATCH',
+                barIds: selectedBars,
                 props: { diam: null }
               })}
               style={{
@@ -273,20 +282,21 @@ function SelectedBarSection() {
 // ── Campo de formulario ───────────────────────────────────────────
 
 function FormField({ field, value, onChange }) {
-  const { id, l, u, t, mn, mx, st, opts, ph } = field;
+  const { id, l, u, t, mn, mx, st, opts, ph, offset } = field;
+  const off = offset || 0;
 
   // Estado local para inputs numéricos: permite vaciar y escribir sin fricción
   const [numRaw, setNumRaw] = useState(() =>
-    t === 'n' ? String(value ?? field.v ?? '') : ''
+    t === 'n' ? String(off ? ((value ?? field.v ?? 0) + off) : (value ?? field.v ?? '')) : ''
   );
   const isFocused = useRef(false);
 
   // Sincronizar cuando el valor externo cambia y el input no está activo
   useEffect(() => {
     if (t === 'n' && !isFocused.current) {
-      setNumRaw(String(value ?? field.v ?? ''));
+      setNumRaw(String(off ? ((value ?? field.v ?? 0) + off) : (value ?? field.v ?? '')));
     }
-  }, [value, field.v, t]);
+  }, [value, field.v, t, off]);
 
   const label = (
     <label className="field-label" htmlFor={id}>
@@ -300,7 +310,7 @@ function FormField({ field, value, onChange }) {
         {label}
         <input
           id={id} type="number"
-          min={mn} max={mx} step={st}
+          min={mn != null ? mn + off : undefined} max={mx != null ? mx + off : undefined} step={st}
           value={numRaw}
           onFocus={e => { isFocused.current = true; e.target.select(); }}
           onChange={e => {
@@ -308,17 +318,16 @@ function FormField({ field, value, onChange }) {
             setNumRaw(raw);
             // Propagar al estado global en tiempo real para reactividad del canvas
             const v = parseFloat(raw);
-            if (!isNaN(v)) onChange(v);
+            if (!isNaN(v)) onChange(v - off);
           }}
           onBlur={() => {
             isFocused.current = false;
             const v = parseFloat(numRaw);
             if (!isNaN(v)) {
-              onChange(v);
+              onChange(v - off);
               setNumRaw(String(v));
             } else {
-              // Revertir al valor actual si el campo queda inválido
-              setNumRaw(String(value ?? field.v ?? ''));
+              setNumRaw(String(off ? ((value ?? field.v ?? 0) + off) : (value ?? field.v ?? '')));
             }
           }}
           className="field-input"

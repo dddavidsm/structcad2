@@ -15,7 +15,7 @@ export const STRUCTS = {
           { id: 'spacings_front',    l: 'Sep. irregulares',     t: 'tx', v: '', ph: 'ej: 21, 18, 18, 21  (nbf-1 valores)' },
         ]},
         { s: 'Cara lateral (izq./der.)', f: [
-          { id: 'bars_lateral_count', l: 'Nº barras (interm.)',  u: 'ud', t: 'n', mn: 0,  mx: 14, st: 1,  v: 4  },
+          { id: 'bars_lateral_count', l: 'Nº barras TOTALES',   u: 'ud', t: 'n', mn: 0,  mx: 14, st: 1,  v: 4, offset: 2 },
           { id: 'bars_lateral_diam',  l: 'Ø barras',             u: 'mm', t: 'n', mn: 6,  mx: 40, st: 2,  v: 20 },
           { id: 'cover_lateral',      l: 'Recub. barras lat.',   u: 'cm', t: 'n', mn: 1,  mx: 12, st: .5, v: 6  },
           { id: 'spacings_lateral',   l: 'Sep. irregulares',     t: 'tx', v: '', ph: 'ej: 15, 14, 14, 15  (nbl valores)' },

@@ -857,22 +857,30 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     # Estribos personalizados — L abierta en esquina o U envolvente segun geometria
     cust_stirrups = list(getattr(data, 'customStirrups', None) or [])
-    pad = max(rf, rl) + ds / 20   # radio de barra + semigrosor del estribo
+    pad = max(rf, rl) + ds / 20   # radio de barra + semigrosor del estribo (perim.)
+    half_st = ds / 20              # semi-grosor del estribo para pad individual
     for tie in cust_stirrups:
         # Compatibilidad: acepta tanto lista de IDs como dict {barIds:[...], ny, inset}
         tie_bar_ids = tie.get('barIds', tie) if isinstance(tie, dict) else tie
         pts = [bar_id_to_cm_pos[bid] for bid in tie_bar_ids if bid in bar_id_to_cm_pos]
         if len(pts) < 2:
             continue
+        # Pad individual: radio real de cada barra + semi-grosor estribo
+        pads = [p[2] / 20 + half_st for p in pts]
+        max_pad = max(pads)
         # Intentar dibujar como L abierta paralela a la esquina (3 barras en L)
-        if _analyse_and_draw_corner_l_stirrup(msp, pts, pad, PX + W/2, PY + D/2, ds/10):
+        if _analyse_and_draw_corner_l_stirrup(msp, pts, max_pad, PX + W/2, PY + D/2, ds/10):
             continue
-        # Fallback: dibujar como U envolvente (2+ barras o no es esquina en L)
-        xs = [p[0] for p in pts]
-        ys = [p[1] for p in pts]
+        # Fallback: dibujar como U envolvente centro-a-centro con pad individual
+        x_data = [(p[0], p[2] / 20 + half_st) for p in pts]
+        y_data = [(p[1], p[2] / 20 + half_st) for p in pts]
+        x_min_p = min(x_data, key=lambda v: v[0])
+        x_max_p = max(x_data, key=lambda v: v[0])
+        y_min_p = min(y_data, key=lambda v: v[0])
+        y_max_p = max(y_data, key=lambda v: v[0])
         _draw_u_tie(msp,
-                    min(xs) - pad, max(xs) + pad,
-                    min(ys) - pad, max(ys) + pad,
+                    x_min_p[0] - x_min_p[1], x_max_p[0] + x_max_p[1],
+                    y_min_p[0] - y_min_p[1], y_max_p[0] + y_max_p[1],
                     ds/10, PX + W/2, PY + D/2)
 
     # Mascara de hormigon: tapa el acero en zonas intactas, revela en zonas picadas
@@ -989,16 +997,18 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
         y_pos = zb + (1.0 - ny) * (zt - zb)   # flip Y: canvas top (ny=0) → DXF alto
-        # Calcular rango X a partir de las posiciones de las barras en profundidad
-        depths = []
+        # Calcular rango X con pad individual por barra
+        depth_data = []
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
-                _, by, _ = bar_id_to_cm_pos[bid]
-                depths.append(by - PY)       # profundidad relativa al frente
-        if not depths:
+                _, by, bd = bar_id_to_cm_pos[bid]
+                depth_data.append((by - PY, bd / 20 + half_st))
+        if not depth_data:
             continue
-        x1 = LX + min(depths) - pad
-        x2 = LX + max(depths) + pad
+        d_min = min(depth_data, key=lambda v: v[0])
+        d_max = max(depth_data, key=lambda v: v[0])
+        x1 = LX + d_min[0] - d_min[1]
+        x2 = LX + d_max[0] + d_max[1]
         x1 = max(x1, LX)
         x2 = min(x2, LX + D)
         if x2 > x1:
@@ -1073,15 +1083,18 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
         y_pos = zb_f + (1.0 - ny) * (zt_f - zb_f)   # flip Y: canvas top (ny=0) → DXF alto
-        widths = []
+        # Calcular rango X con pad individual por barra
+        width_data = []
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
-                bx, _, _ = bar_id_to_cm_pos[bid]
-                widths.append(bx - PX)      # posicion relativa al borde izq
-        if not widths:
+                bx, _, bd = bar_id_to_cm_pos[bid]
+                width_data.append((bx - PX, bd / 20 + half_st))
+        if not width_data:
             continue
-        x1 = FX + min(widths) - pad
-        x2 = FX + max(widths) + pad
+        w_min = min(width_data, key=lambda v: v[0])
+        w_max = max(width_data, key=lambda v: v[0])
+        x1 = FX + w_min[0] - w_min[1]
+        x2 = FX + w_max[0] + w_max[1]
         x1 = max(x1, FX)
         x2 = min(x2, FX + W)
         if x2 > x1:
