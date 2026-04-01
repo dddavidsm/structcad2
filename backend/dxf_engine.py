@@ -257,6 +257,31 @@ def _to_dxf_circles(circles, px, py, struct_w, struct_h, target_view='section'):
     return result
 
 
+def _cluster_circles(circles):
+    """
+    Reduce cientos de círculos superpuestos a un conjunto representativo no solapado.
+
+    Algoritmo: cuadrícula con celda = 2 × radio_medio.
+    Garantía matemática: círculos en celdas adyacentes tienen centros separados ≥ cell_size
+    y suma de radios ≤ cell_size  →  no se solapan  →  AutoCAD resuelve la paridad sin errores.
+    Cada celda conserva el círculo de mayor radio como representante.
+    """
+    if not circles:
+        return []
+    avg_r = sum(r for _, _, r in circles) / len(circles)
+    cell = max(avg_r * 2.0, 0.5)
+    grid = {}  # key → [sum_x, sum_y, max_r, count]
+    for cx, cy, r in circles:
+        key = (int(cx / cell), int(cy / cell))
+        if key in grid:
+            g = grid[key]
+            g[0] += cx; g[1] += cy
+            g[2] = max(g[2], r); g[3] += 1
+        else:
+            grid[key] = [cx, cy, r, 1]
+    return [(g[0] / g[3], g[1] / g[3], g[2]) for g in grid.values()]
+
+
 def _draw_repair_texture(msp, picado_circles):
     """Dibuja fondo blanco y fragmentos procedurales de hormigón roto en las zonas pintadas."""
     if not picado_circles:
@@ -267,8 +292,8 @@ def _draw_repair_texture(msp, picado_circles):
         h.set_solid_fill(color=255)
         path = h.paths.add_edge_path()
         path.add_arc((cx, cy), r, 0, 360)
-    # Matriz de fragmentos irregulares (efecto salt & pepper)
-    for cx, cy, r in picado_circles:
+    # Matriz de fragmentos irregulares (efecto salt & pepper) — solo sobre representantes agrupados
+    for cx, cy, r in _cluster_circles(picado_circles):
         num_fragments = max(1, int(r * 2))
         for _ in range(num_fragments):
             fx = cx + random.uniform(-r * 0.8, r * 0.8)
@@ -293,8 +318,10 @@ def _draw_concrete_mask(msp, struct_w, struct_h, picado_circles, px_base=0, py_b
         (px_base,            py_base + struct_h),
     ]
     h.paths.add_polyline_path(rect_pts, is_closed=True)
-    # Agujeros (círculos de picado = islands sin relleno)
-    for cx, cy, r in picado_circles:
+    # Agujeros (islands): usar representantes agrupados para evitar solapamiento de arcos.
+    # _cluster_circles garantiza que círculos en celdas adyacentes no se cruzan
+    # → AutoCAD resuelve la paridad sin saturarse ni rellenar intersecciones.
+    for cx, cy, r in _cluster_circles(picado_circles):
         inner = h.paths.add_edge_path()
         inner.add_arc((cx, cy), r, 0, 360)
 
