@@ -15,6 +15,7 @@ Estilo visual (segun imagenes de referencia):
 
 import io
 import math
+import random
 
 import ezdxf
 from ezdxf.enums import TextEntityAlignment
@@ -218,6 +219,84 @@ def _fill_picado_circles(msp, circles, px, py, struct_w, struct_h, target_view='
             _fill_picado(msp, pts)
         except (ValueError, TypeError, KeyError):
             continue
+
+
+def _generate_irregular_fragment(cx, cy, r_min, r_max, num_points=6):
+    """Genera un polígono irregular que simula un fragmento de hormigón roto."""
+    pts = []
+    angle_step = 360 / num_points
+    for i in range(num_points):
+        angle = math.radians(i * angle_step + random.uniform(-10, 10))
+        r = random.uniform(r_min, r_max)
+        pts.append((cx + r * math.cos(angle), cy + r * math.sin(angle)))
+    return pts
+
+
+def _to_dxf_circles(circles, px, py, struct_w, struct_h, target_view='section'):
+    """Convierte círculos normalizados [0,1] a coordenadas DXF absolutas (cx, cy, r)."""
+    result = []
+    min_dim = min(struct_w, struct_h)
+    for c in circles:
+        if c.get('view') and c.get('view') != target_view:
+            continue
+        try:
+            nx = float(c.get('nx', 0))
+            ny = float(c.get('ny', 0))
+            nr = float(c.get('nr', 0))
+            cx = px + nx * struct_w
+            cy = py + (1.0 - ny) * struct_h
+            r  = nr * min_dim
+            if r < 0.2:
+                continue
+            r = min(r, struct_w / 2, struct_h / 2)
+            cx = max(px + r, min(px + struct_w - r, cx))
+            cy = max(py + r, min(py + struct_h - r, cy))
+            result.append((cx, cy, r))
+        except (ValueError, TypeError, KeyError):
+            continue
+    return result
+
+
+def _draw_repair_texture(msp, picado_circles):
+    """Dibuja fondo blanco y fragmentos procedurales de hormigón roto en las zonas pintadas."""
+    if not picado_circles:
+        return
+    # Fondo blanco (borra el gris de debajo)
+    for cx, cy, r in picado_circles:
+        h = msp.add_hatch(dxfattribs={"layer": "PICADO"})
+        h.set_solid_fill(color=255)
+        path = h.paths.add_edge_path()
+        path.add_arc((cx, cy), r, 0, 360)
+    # Matriz de fragmentos irregulares (efecto salt & pepper)
+    for cx, cy, r in picado_circles:
+        num_fragments = max(1, int(r * 2))
+        for _ in range(num_fragments):
+            fx = cx + random.uniform(-r * 0.8, r * 0.8)
+            fy = cy + random.uniform(-r * 0.8, r * 0.8)
+            frag_pts = _generate_irregular_fragment(fx, fy, 0.2, 0.6)
+            color = random.choice([8, 9])
+            h = msp.add_hatch(dxfattribs={"layer": "PICADO"})
+            h.set_solid_fill(color=color)
+            h.paths.add_polyline_path(frag_pts, is_closed=True)
+
+
+def _draw_concrete_mask(msp, struct_w, struct_h, picado_circles, px_base=0, py_base=0):
+    """Hatch gris sólido sobre toda la estructura con agujeros en las zonas de picado (island effect)."""
+    h = msp.add_hatch(dxfattribs={"layer": "HORMIGON"})
+    h.set_solid_fill(color=254)
+    h.dxf.hatch_style = 0  # Normal: rellena exterior, deja vacíos los islands interiores
+    # Borde exterior (rectángulo de la sección)
+    rect_pts = [
+        (px_base,            py_base),
+        (px_base + struct_w, py_base),
+        (px_base + struct_w, py_base + struct_h),
+        (px_base,            py_base + struct_h),
+    ]
+    h.paths.add_polyline_path(rect_pts, is_closed=True)
+    # Agujeros (círculos de picado = islands sin relleno)
+    for cx, cy, r in picado_circles:
+        inner = h.paths.add_edge_path()
+        inner.add_arc((cx, cy), r, 0, 360)
 
 
 def _draw_cracks(msp, cracks, px, py, struct_w, struct_h, target_view='section'):
@@ -639,14 +718,12 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     # ── 1. SECCION EN PLANTA ──────────────────────────────────────
     PX,PY = 0.0,0.0
 
-    # Hormigon intacto (gris): toda la seccion
-    _fill_gray(msp, _rpts(PX,PY,W,D))
-
-    # Zona picada: solo donde el usuario pinto con la brocha
     circles = list(getattr(data, 'picked_circles', None) or [])
     cracks = list(getattr(data, 'cracks_data', None) or [])
-    _fill_picado_circles(msp, circles, PX, PY, W, D, 'section')
-    _draw_cracks(msp, cracks, PX, PY, W, D, 'section')
+    circles_section = _to_dxf_circles(circles, PX, PY, W, D, 'section')
+
+    # Textura de reparacion (fondo blanco + fragmentos procedurales) — capa base
+    _draw_repair_texture(msp, circles_section)
 
     # Contorno exterior (encima de rellenos)
     _rect(msp,PX,PY,W,D,"SECCION",lw=70)
@@ -697,6 +774,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
                     min(xs) - pad, max(xs) + pad,
                     min(ys) - pad, max(ys) + pad,
                     ds/10, PX + W/2, PY + D/2)
+
+    # Mascara de hormigon: tapa el acero en zonas intactas, revela en zonas picadas
+    _draw_concrete_mask(msp, W, D, circles_section, PX, PY)
+    _draw_cracks(msp, cracks, PX, PY, W, D, 'section')
 
     # Cotas
     yc1=PY-10; yc2=PY-18
@@ -750,10 +831,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
 
     zt=LY+VH-marg; zb=LY+marg
 
-    # Hormigon intacto en toda la vista lateral
-    _fill_gray(msp,_rpts(LX,LY,D,VH))
-    _fill_picado_circles(msp, circles, LX, LY, D, VH, 'lateral')
-    _draw_cracks(msp, cracks, LX, LY, D, VH, 'lateral')
+    circles_lateral = _to_dxf_circles(circles, LX, LY, D, VH, 'lateral')
+    # Textura de reparacion — capa base
+    _draw_repair_texture(msp, circles_lateral)
     _rect(msp,LX,LY,D,VH,"SECCION",lw=70)
 
     # Lineas de zona inspeccionada
@@ -800,6 +880,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         if x2 > x1:
             _L(msp, x1, y_pos, x2, y_pos, "ESTRIBOS", lw=35)
 
+    # Mascara de hormigon con agujeros en zonas picadas
+    _draw_concrete_mask(msp, D, VH, circles_lateral, LX, LY)
+    _draw_cracks(msp, cracks, LX, LY, D, VH, 'lateral')
+
     # Cotas
     _dim_h(msp,LX,LX+D,LY-10,LY,f"{D:.0f} cm",ht=2.2)
     _dim_h(msp,LX,LX+cl,LY-18,LY,f"r={cl:.0f} cm",ht=1.8)
@@ -824,10 +908,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     FX=D+45.0; FY=LY
     zt_f=FY+VH-marg; zb_f=FY+marg
 
-    # Hormigon intacto en toda la vista frontal
-    _fill_gray(msp,_rpts(FX,FY,W,VH))
-    _fill_picado_circles(msp, circles, FX, FY, W, VH, 'elevation')
-    _draw_cracks(msp, cracks, FX, FY, W, VH, 'elevation')
+    circles_elevation = _to_dxf_circles(circles, FX, FY, W, VH, 'elevation')
+    # Textura de reparacion — capa base
+    _draw_repair_texture(msp, circles_elevation)
     _rect(msp,FX,FY,W,VH,"SECCION",lw=70)
 
     # Lineas de zona inspeccionada
@@ -865,6 +948,10 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         x2 = min(x2, FX + W)
         if x2 > x1:
             _L(msp, x1, y_pos, x2, y_pos, "ESTRIBOS", lw=35)
+
+    # Mascara de hormigon con agujeros en zonas picadas
+    _draw_concrete_mask(msp, W, VH, circles_elevation, FX, FY)
+    _draw_cracks(msp, cracks, FX, FY, W, VH, 'elevation')
 
     # Cotas
     yf1=FY-10; yf2=FY-20
