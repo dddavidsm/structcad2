@@ -710,6 +710,34 @@ def _note(msp, x_tip, y_tip, x_txt, y_txt, lines,
     for i,ln in enumerate(lines):
         _T(msp,x_txt,y_txt+i*ht*1.4,ht,_a(str(ln)),layer)
 
+
+def _note_mtext(msp, x_tip, y_tip, x_txt, y_txt, lines,
+                layer="TEXTO", ht=2.2):
+    """Leader con punta de flecha + MTEXT formateado en lista (saltos \\P)."""
+    # Linea guia desde la punta al texto
+    _L(msp, x_tip, y_tip, x_txt, y_txt, layer, lw=9)
+    # Punta de flecha solida
+    dx = x_txt - x_tip; dy = y_txt - y_tip
+    lng = math.sqrt(dx*dx + dy*dy) or 1
+    ux = dx/lng; uy = dy/lng
+    a = 1.0
+    p = [(x_tip, y_tip),
+         (x_tip + ux*a*2 - uy*a*.5, y_tip + uy*a*2 + ux*a*.5),
+         (x_tip + ux*a*2 + uy*a*.5, y_tip + uy*a*2 - ux*a*.5)]
+    h = msp.add_hatch(dxfattribs={"layer": layer})
+    h.set_solid_fill(color=7)
+    h.paths.add_polyline_path(p, is_closed=True)
+    # MTEXT con saltos de linea \P entre cada elemento de la lista
+    clean = [_a(str(ln)) for ln in lines if str(ln).strip()]
+    content = r'\P'.join(clean)
+    msp.add_mtext(content, dxfattribs={
+        "layer": layer,
+        "char_height": float(ht),
+        "insert": (x_txt, y_txt),
+        "attachment_point": 7,   # BOTTOM_LEFT
+        "width": 58,
+    })
+
 def _title(msp, x, y, txt, ht=3.5):
     txt = _a(txt).upper()
     _T(msp,x,y,ht,txt,"TEXTO",TextEntityAlignment.CENTER)
@@ -833,11 +861,12 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         _fill_bar(msp, bx, PY+cl,   rfb)   # FB — fila inferior en DXF (y pequeño)
 
     # Barras cara lateral: SOLO INTERMEDIAS (las esquinas ya estan en cara frontal)
+    # LL1=top (Canvas Y=0) -> DXF y grande: se cuenta desde arriba (PY+D-cl)
     for i in range(1, nbl+1):
         if use_custom_lateral:
-            by = PY + cl + sum(parsed_lateral[:i])
+            by = PY + D - cl - sum(parsed_lateral[:i])
         else:
-            by = PY + cl + i * spl_int  # Fallback uniforme
+            by = PY + D - cl - i * spl_int  # Fallback uniforme
         rll = max(.8, _bar_diam(f"LL{i}", dl) / 20)
         rlr = max(.8, _bar_diam(f"LR{i}", dl) / 20)
         _fill_bar(msp, PX+cf,   by, rll)    # columna izquierda
@@ -851,7 +880,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         bar_id_to_cm_pos[f"FT{i+1}"] = (bx, PY + D - cl, _bar_diam(f"FT{i+1}", df))
         bar_id_to_cm_pos[f"FB{i+1}"] = (bx, PY + cl,     _bar_diam(f"FB{i+1}", df))
     for i in range(1, nbl + 1):
-        by = PY + cl + sum(parsed_lateral[:i]) if use_custom_lateral else PY + cl + i * spl_int
+        by = (PY + D - cl - sum(parsed_lateral[:i])) if use_custom_lateral else (PY + D - cl - i * spl_int)
         bar_id_to_cm_pos[f"LL{i}"] = (PX + cf,     by, _bar_diam(f"LL{i}", dl))
         bar_id_to_cm_pos[f"LR{i}"] = (PX + W - cf, by, _bar_diam(f"LR{i}", dl))
 
@@ -891,17 +920,13 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
     _front_xs = [bar_id_to_cm_pos[f"FT{i+1}"][0] for i in range(nbf)]
     _lat_ys   = sorted([bar_id_to_cm_pos[f"LL{i}"][1] for i in range(1, nbl+1)]) if nbl > 0 else []
 
-    yc1=PY-10; yc2=PY-18
+    # Cotas horizontales (cara inferior) — total W + recubrimientos
+    yc1=PY-10; yc2=PY-20
     _dim_h(msp,PX,PX+W,yc2,PY,f"{W:.0f}",ht=2.5)
     _dim_h(msp,PX,PX+cf,yc1,PY,f"r={cf:.0f}",ht=1.8)
     _dim_h(msp,PX+W-cf,PX+W,yc1,PY,f"r={cf:.0f}",ht=1.8)
 
-    xc1=PX+W+12; xc2=PX+W+20
-    _dim_v(msp,PY,PY+D,xc2,PX+W,f"{D:.0f}",ht=2.5)
-    _dim_v(msp,PY,PY+cl,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
-    _dim_v(msp,PY+D-cl,PY+D,xc1,PX+W,f"r={cl:.0f}",ht=1.8)
-
-    # Cotas progresivas horizontales — gap real entre cada par de barras
+    # Cotas progresivas horizontales — gap real entre cada par de barras (debajo)
     yc_prog = PY - 6
     xs_prog = [PX] + _front_xs + [PX + W]
     for i in range(len(xs_prog)-1):
@@ -909,8 +934,9 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         if dist > 0.5:
             _dim_h(msp, xs_prog[i], xs_prog[i+1], yc_prog, PY, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
-    # Cotas progresivas verticales — gap real entre cada par de barras
-    xc_prog = PX - 6
+    # Cotas verticales en el lado IZQUIERDO — total D + progresivas (lado derecho queda limpio)
+    _dim_v(msp, PY, PY+D, PX-20, PX, f"{D:.0f}", ht=2.5)
+    xc_prog = PX - 8
     ys_bars = sorted(list(set([PY+cl, PY+D-cl] + _lat_ys)))
     ys_prog = [PY] + ys_bars + [PY + D]
     for i in range(len(ys_prog)-1):
@@ -929,14 +955,23 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         return " + ".join(f"{n}%%c{d:.0f}" for d, n in sorted(counts.items()))
 
     _front_ids = [f"FT{i+1}" for i in range(nbf)]
-    _note(msp,PX+W*.65,PY+D*.7,
-          PX+W+32,PY+D*.8,
-          [_bar_summary(_front_ids, df) + " front.",
-           f"Estribo %%c{ds:.0f}mm"])
+    _sec_note_lines = ["Armadura (Planta):"]
+    _sec_note_lines.append(f"- {_bar_summary(['FT1', f'FT{nbf}'], df)} esquinas")
+    if nbf > 2:
+        _inter_ids = [f"FT{i+1}" for i in range(1, nbf-1)]
+        _sec_note_lines.append(f"- {_bar_summary(_inter_ids, df)} interm.")
+    if nbl > 0:
+        _lat_ids_sec = [f"LL{i}" for i in range(1, nbl+1)]
+        _sec_note_lines.append(f"- {_bar_summary(_lat_ids_sec, dl)} laterales")
+    _sec_note_lines.append(f"- Estribo: %%c{ds:.0f}mm  r={cs:.0f}cm")
+    # Punta de flecha en el borde exterior (no en el interior del pilar)
+    _note_mtext(msp, PX+W+1, PY+D*.65,
+                PX+W+32, PY+D*.8,
+                _sec_note_lines)
 
     _T(msp,PX-16,PY+D/2,2.5,"LATERAL","TEXTO",
        TextEntityAlignment.CENTER,90.0)
-    _T(msp,PX+W/2,PY-28,2.5,"FRONTAL","TEXTO",
+    _T(msp,PX+W/2,PY-30,2.5,"FRONTAL","TEXTO",
        TextEntityAlignment.CENTER)
     _title(msp,PX+W/2,PY+D+10,"SECCION EN PLANTA")
 
@@ -1002,7 +1037,8 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         for bid in tie_bar_ids:
             if bid in bar_id_to_cm_pos:
                 _, by, bd = bar_id_to_cm_pos[bid]
-                depth_data.append((by - PY, bd / 20 + half_st))
+                # Distancia desde el TOP del pilar: plan top (PY+D) -> LX (izq lateral)
+                depth_data.append((PY + D - by, bd / 20 + half_st))
         if not depth_data:
             continue
         d_min = min(depth_data, key=lambda v: v[0])
@@ -1027,19 +1063,25 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         if dist > 0.5:
             _dim_h(msp, xs_lat_prog[i], xs_lat_prog[i+1], yc_lat_prog, LY, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
-    xv=LX+D+12
-    _dim_v(msp,LY,LY+VH,xv+8,LX+D,f"{VH:.0f} cm",ht=2.0)
-    _dim_v(msp,zb,zt,xv,LX+D,f"insp={ih:.0f} cm",ht=2.0)
-    _dim_v(msp,LY,LY+marg,xv+16,LX+D,f"{marg:.0f} cm",ht=1.8)
+    # Cotas laterales — mayor separacion entre filas para evitar solapamiento (FASE 3)
+    xv = LX+D+10
+    _dim_v(msp, zb, zt,      xv,    LX+D, f"insp={ih:.0f}cm", ht=2.0)
+    _dim_v(msp, LY, LY+marg, xv+14, LX+D, f"{marg:.0f}cm",    ht=1.8)
+    _dim_v(msp, LY, LY+VH,   xv+28, LX+D, f"{VH:.0f}cm",      ht=2.0)
 
     n_lat_total = nbl + 2  # intermedias + 2 esquinas
     _corner_ids = ["FT1", f"FT{nbf}"]
     _lat_ids = [f"LL{i}" for i in range(1, nbl+1)]
-    _note(msp,LX,(zt+zb)/2,LX-40,(zt+zb)/2+5,
-          [_bar_summary(_corner_ids, df) + " esquina",
-           _bar_summary(_lat_ids, dl) + " lat. int." if nbl > 0 else "",
-           f"Total: {n_lat_total} barras/cara",
-           f"Est. %%c{ds:.0f}mm  r={cs:.0f}cm"])
+    _lat_note_lines = ["Vista Lateral:"]
+    _lat_note_lines.append(f"- {_bar_summary(_corner_ids, df)} esq.")
+    if nbl > 0:
+        _lat_note_lines.append(f"- {_bar_summary(_lat_ids, dl)} lat.")
+    _lat_note_lines.append(f"- {n_lat_total} barras/cara")
+    _lat_note_lines.append(f"- Est. %%c{ds:.0f}mm  r={cs:.0f}cm")
+    # Punta en el borde exterior izquierdo de la vista lateral
+    _note_mtext(msp, LX-1, (zt+zb)/2,
+                LX-48, (zt+zb)/2+5,
+                _lat_note_lines)
     _title(msp,LX+D/2,LY-32,"VISTA LATERAL")
 
     # ── 3. VISTA FRONTAL ─────────────────────────────────────────
@@ -1114,15 +1156,41 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         if dist > 0.5:
             _dim_h(msp, xs_front_prog[i], xs_front_prog[i+1], yc_front_prog, FY, f"{dist:.1f}".rstrip('0').rstrip('.'), ht=1.5)
 
-    xvf=FX+W+12
-    _dim_v(msp,FY,FY+VH,xvf+8,FX+W,f"{VH:.0f} cm",ht=2.0)
-    _dim_v(msp,zb_f,zt_f,xvf,FX+W,f"insp={ih:.0f} cm",ht=2.0)
+    # Cotas frontales — separacion aumentada (FASE 3)
+    xvf = FX+W+10
+    _dim_v(msp, zb_f, zt_f, xvf,    FX+W, f"insp={ih:.0f}cm", ht=2.0)
+    _dim_v(msp, FY, FY+VH,  xvf+16, FX+W, f"{VH:.0f}cm",      ht=2.0)
 
-    _note(msp,FX+W*.65,zt_f-ih*.3,
-          FX+W+30,zt_f+5,
-          [_bar_summary(_front_ids, df) + " cara front.",
-           f"Est. %%c{ds:.0f}mm  r={cf:.0f}/{cs:.0f}cm"])
+    _front_note_lines = ["Vista Frontal:"]
+    _front_note_lines.append(f"- {_bar_summary(_front_ids, df)} cara front.")
+    _front_note_lines.append(f"- Est. %%c{ds:.0f}mm  r={cf:.0f}/{cs:.0f}cm")
+    # Punta en el borde exterior derecho de la vista frontal
+    _note_mtext(msp, FX+W+1, zt_f-ih*.3,
+                FX+W+32, zt_f+5,
+                _front_note_lines)
     _title(msp,FX+W/2,FY-32,"VISTA FRONTAL")
+
+    # ── Notas del usuario (anotaciones del Canvas -> MTEXT en DXF) ──
+    for n in list(getattr(data, 'user_notes', None) or []):
+        try:
+            nx   = float(n.get('nx', 0))
+            ny   = float(n.get('ny', 0))
+            txt  = _a(str(n.get('text', '')))
+            if not txt:
+                continue
+            nview = n.get('view', 'section')
+            if nview == 'section':
+                dx = PX + nx * W;  dy = PY + (1.0 - ny) * D
+            elif nview == 'lateral':
+                dx = LX + nx * D;  dy = LY + (1.0 - ny) * VH
+            else:   # elevation / frontal
+                dx = FX + nx * W;  dy = FY + (1.0 - ny) * VH
+            msp.add_mtext(txt, dxfattribs={
+                "layer": "TEXTO", "char_height": 2.5,
+                "insert": (dx, dy), "width": 45, "attachment_point": 7,
+            })
+        except Exception:
+            continue
 
     _cajetin(msp,FX+W+28,FY-55,_caj(data))
     return _out(doc)

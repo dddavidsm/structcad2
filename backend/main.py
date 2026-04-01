@@ -55,6 +55,8 @@ class InspectionBase(BaseModel):
     # Fisuras normalizadas: {nx1, ny1, nx2, ny2, view}
     cracks_data: Optional[List[Any]] = []
     estriboABarra: Optional[float] = 0.0
+    # Anotaciones del usuario: {nx, ny, text, view} (coords normalizadas [0,1])
+    user_notes: Optional[List[Any]] = []
 
 class PillarRectData(InspectionBase):
     width: float = Field(..., gt=0)

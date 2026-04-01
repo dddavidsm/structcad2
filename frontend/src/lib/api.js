@@ -31,6 +31,7 @@ export async function exportDXF(state, onStatus) {
   p.cracks_count = (cracks || []).length;
   p.cracks_data = _normalizeCracks(cracks || [], sectionBounds);
   p.annotations  = (annotations || []).map(a => ({ text: a.text, x: a.x, y: a.y }));
+  p.user_notes   = _normalizeAnnotations(annotations || [], sectionBounds);
   p.view         = view;
   p.picked_circles = _normalizeStrokes(pickedStrokes || [], sectionBounds);
   p.customStirrups = (allCustomStirrups || []).map(s =>
@@ -126,6 +127,22 @@ function _normalizeStrokes(strokes, fallbackBounds) {
       ny: (s.cy - oy) / sh,
       nr,
       view: s.view || 'section'
+    };
+  }).filter(Boolean);
+}
+
+function _normalizeAnnotations(annotations, fallbackBounds) {
+  if (!annotations.length) return [];
+  return annotations.map(a => {
+    const b = a.bounds || fallbackBounds;
+    if (!b) return null;
+    const { ox, oy, sw, sh } = b;
+    if (!sw || !sh) return null;
+    return {
+      nx:   (a.x - ox) / sw,
+      ny:   (a.y - oy) / sh,
+      text: a.text || '',
+      view: a.view || 'section',
     };
   }).filter(Boolean);
 }
