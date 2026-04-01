@@ -786,10 +786,11 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
         return PX + cf + i * spf
 
     def _by_lateral(i):
-        """Y de la barra lateral i (1-indexed). Usa sep. irregular si válida."""
+        """Y de la barra lateral i (1-indexed). Usa sep. irregular si válida.
+        Calculado desde ARRIBA hacia abajo para coincidir con IDs del Canvas (LL1 = top)."""
         if sp_lateral:
-            return PY + cl + sum(sp_lateral[:i])
-        return PY + cl + i * spl_int
+            return PY + D - cl - sum(sp_lateral[:i])
+        return PY + D - cl - i * spl_int
 
     doc,msp = _make_doc()
 
