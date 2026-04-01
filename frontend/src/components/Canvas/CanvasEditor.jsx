@@ -1359,17 +1359,15 @@ export default function CanvasEditor() {
     // ── Soltar barra longitudinal ────────────────────────────────
     if (dragBarRef.current) {
       const db = dragBarRef.current;
-      dragBarRef.current = null;
-      if (cvRef.current) cvRef.current.style.cursor = '';
+
       if (db.moved) {
-        // Calcular separaciones finales y actualizar formulario
+        // 1. Calcular separaciones finales MIENTRAS la ref sigue existiendo
         const overrideP = _computeOverrideP(getParams());
         if (db.faceType === 'front') {
           setFormValue('spacings_front', overrideP.spacings_front);
         } else {
           setFormValue('spacings_lateral', overrideP.spacings_lateral);
         }
-        // setFormValue dispara re-render → fullRedraw automático
       } else {
         // Click sin mover: toggle selección
         const next = selectedBars.includes(db.barId)
@@ -1377,6 +1375,10 @@ export default function CanvasEditor() {
           : [...selectedBars, db.barId];
         dispatch({ type: 'SET_SELECTED_BARS', payload: next });
       }
+
+      // 2. AHORA limpiamos la ref y el cursor
+      dragBarRef.current = null;
+      if (cvRef.current) cvRef.current.style.cursor = '';
       return;
     }
 
