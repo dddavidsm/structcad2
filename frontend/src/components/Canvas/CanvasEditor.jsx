@@ -125,15 +125,18 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const spf = nbf>1 ? (w-2*v_cl)/(nbf-1) : 0;
   const spFront = parseSpacings(p.spacings_front);
   const useSpFront = spFront && spFront.length === nbf - 1;
+  const frontBXs = [];
   for (let i=0; i<nbf; i++) {
     const xPos = useSpFront ? accumPos(v_cl, spFront, i) : v_cl + i*spf;
     const bx = ox + xPos * sc;
+    frontBXs.push(bx);
     barPositionsOut.push({id:`FT${i+1}`,label:`FT${i+1}`,cx:bx,cy:oy+v_cf*sc,r:barR(df,sc),diam:df,type:'frontal-top'});
     barPositionsOut.push({id:`FB${i+1}`,label:`FB${i+1}`,cx:bx,cy:oy+(d-v_cf)*sc,r:barR(df,sc),diam:df,type:'frontal-bot'});
   }
 
   // Cara lateral: separaciones uniformes o personalizadas (spacings_lateral = nbl valores)
   // spacings_lateral[0] = gap de esquina a LL1, [k] = gap de LLk a LL(k+1)
+  const latBYs = [];
   if (nbl>0) {
     const spl = (d-2*v_cf)/(nbl+1);
     const spLat = parseSpacings(p.spacings_lateral);
@@ -141,8 +144,34 @@ function drawPilarRect(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     for (let i=1; i<=nbl; i++) {
       const yPos = useSpLat ? v_cf + accumPos(0, spLat, i) : v_cf + i*spl;
       const by = oy + yPos * sc;
+      latBYs.push(by);
       barPositionsOut.push({id:`LL${i}`,label:`LL${i}`,cx:ox+v_cl*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-left'});
       barPositionsOut.push({id:`LR${i}`,label:`LR${i}`,cx:ox+(w-v_cl)*sc,cy:by,r:barR(dl,sc),diam:dl,type:'lateral-right'});
+    }
+  }
+
+  // ── Cotas inter-barras (PASO 1) ──────────────────────────────────
+  // Frontales: debajo de la sección
+  if (nbf > 1) {
+    const dimYf = oy + d * sc + 14;
+    for (let i = 0; i < nbf - 1; i++) {
+      const gapPx = frontBXs[i + 1] - frontBXs[i];
+      if (gapPx < 14) continue; // gap demasiado pequeño para cota legible
+      const gapCm = gapPx / sc;
+      const lbl = Math.abs(gapCm - Math.round(gapCm)) < 0.05 ? String(Math.round(gapCm)) : gapCm.toFixed(1);
+      dimH(frontBXs[i], frontBXs[i + 1], dimYf, lbl);
+    }
+  }
+  // Laterales: a la izquierda de la sección (incluye gap hasta corner inferior)
+  if (nbl > 0) {
+    const dimXl = ox - 14;
+    const allLY = [oy + v_cf * sc, ...latBYs, oy + (d - v_cf) * sc];
+    for (let i = 0; i < allLY.length - 1; i++) {
+      const gapPx = allLY[i + 1] - allLY[i];
+      if (gapPx < 14) continue;
+      const gapCm = gapPx / sc;
+      const lbl = Math.abs(gapCm - Math.round(gapCm)) < 0.05 ? String(Math.round(gapCm)) : gapCm.toFixed(1);
+      dimV(allLY[i], allLY[i + 1], dimXl, lbl);
     }
   }
 }
@@ -710,12 +739,20 @@ function getViews(struct) {
   return STRUCT_VIEWS[struct] || STRUCT_VIEWS.default;
 }
 
+/** True si barId es una barra de esquina (FT1, FTn, FB1, FBn) — no draggable */
+function _isCornerBar(barId, nbf) {
+  const m = barId.match(/^F[TB](\d+)$/);
+  if (!m) return false;
+  const i = parseInt(m[1]);
+  return i === 1 || i === nbf;
+}
+
 // ─────────────────────────────────────────────────────────────────
 //  COMPONENTE PRINCIPAL
 // ─────────────────────────────────────────────────────────────────
 
 export default function CanvasEditor() {
-  const { state, dispatch, getParams } = useInspection();
+  const { state, dispatch, getParams, setFormValue } = useInspection();
   // Página activa (arquitectura plana)
   const pagina = state.paginas?.[state.paginaActiva];
   if (!pagina) return <div className="empty-state">No hay ninguna estructura seleccionada.<br />Haz clic en 'Nueva Inspección' o selecciona un elemento para empezar.</div>;
@@ -749,6 +786,7 @@ export default function CanvasEditor() {
   const crackPtsRef   = useRef(null);
   const dragAnnRef    = useRef(null); // { id, startX, startY, moved: boolean }
   const dragStirrupRef = useRef(null); // { index, startY }
+  const dragBarRef     = useRef(null); // { barId, faceType, barIndex, moved, startX, startY, currentX/Y, sc, faceBars, minBound, maxBound, topCornerY?, botCornerY? }
   const panDragRef      = useRef(null); // { startRawX, startRawY, initPanX, initPanY }
   const [cvSize, setCvSize] = useState({ W: 400, H: 328 });
 
@@ -826,6 +864,34 @@ export default function CanvasEditor() {
     setCvSize({ W, H });
   }
 
+  // ── Override de parámetros durante drag de barra (PASO 2) ──────
+  function _computeOverrideP(p) {
+    const db = dragBarRef.current;
+    if (!db || !db.moved) return p;
+
+    if (db.faceType === 'front') {
+      const bars = db.faceBars; // FT bars sorted by index
+      const newCxs = bars.map((b, i) => i === db.barIndex ? db.currentX : b.cx);
+      const totalPx = newCxs[newCxs.length - 1] - newCxs[0];
+      const w = clamp(p.width || 88, 15, 300);
+      const cl = clamp(p.cover_lateral || 6, 1, 12);
+      const estABarra = clamp(p.estriboABarra || 0, 0, 10);
+      const totalCm = w - 2 * (cl + estABarra);
+      if (totalCm <= 0 || totalPx <= 0) return p;
+      const pxPerCm = totalPx / totalCm;
+      const gaps = newCxs.slice(1).map((cx, i) => Math.max(0.1, (cx - newCxs[i]) / pxPerCm));
+      return { ...p, spacings_front: gaps.map(g => g.toFixed(1)).join(', ') };
+    } else {
+      const bars = db.faceBars; // LL bars sorted by index
+      const newCys = bars.map((b, i) => i === db.barIndex ? db.currentY : b.cy);
+      const gaps = newCys.map((cy, i) => {
+        const prevY = i === 0 ? db.topCornerY : newCys[i - 1];
+        return Math.max(0.1, (cy - prevY) / db.sc);
+      });
+      return { ...p, spacings_lateral: gaps.map(g => g.toFixed(1)).join(', ') };
+    }
+  }
+
   // ── Sincronizar strokes del estado con el offscreen canvas ──────
   useEffect(() => {
     const pc = pickedZoneRef.current;
@@ -857,6 +923,9 @@ export default function CanvasEditor() {
     ctx.clearRect(0, 0, W, H);
 
     const p   = getParams();
+    // Durante drag de barra: inyectar separaciones sobreescritas para preview en tiempo real
+    const pDraw = (dragBarRef.current?.moved && struct === 'pilar-rect' && view === 'section')
+      ? _computeOverrideP(p) : p;
     const bps = [];
     const sb  = { ox: 0, oy: 0, sw: 1, sh: 1 };
 
@@ -876,7 +945,7 @@ export default function CanvasEditor() {
         'zapata':     drawZapata,
         'escalera':   drawEscalera,
       };
-      fn[struct]?.(ctx, p, W, H, bps, sb);
+      fn[struct]?.(ctx, pDraw, W, H, bps, sb);
     } else if (view === 'elevation') {
       if      (struct==='pilar-rect') drawElevationPilarRect(ctx,p,W,H,bps,sb);
       else if (struct==='viga')       drawViga(ctx,p,W,H,bps,sb);
@@ -1057,8 +1126,56 @@ export default function CanvasEditor() {
     if (tool === 'select-bar') {
       const bar = _hitBar(x, y);
       if (bar) {
+        // Drag de barras longitudinales: solo en pilar-rect vista cenital
+        if (struct === 'pilar-rect' && !isElevView) {
+          const p = getParams();
+          const nbf = clamp(p.bars_front_count || 5, 2, 16);
+          const nbl = Math.max(0, p.bars_lateral_count || 0);
+          const dpr = Math.min(window.devicePixelRatio || 1, 3);
+          const cW = cvRef.current.width / dpr, cH = cvRef.current.height / dpr;
+          const w = clamp(p.width || 88, 15, 300), d = clamp(p.depth || 68, 15, 300);
+          const sc = Math.min((cW - 100) / w, (cH - 100) / d);
+
+          if (/^F[TB]\d+$/.test(bar.id) && !_isCornerBar(bar.id, nbf) && nbf > 2) {
+            // Barra frontal arrastrable (no esquina)
+            const frontBars = barPosRef.current
+              .filter(b => /^FT\d+$/.test(b.id))
+              .sort((a, b) => parseInt(a.id.slice(2)) - parseInt(b.id.slice(2)));
+            const barIndex = parseInt(bar.id.match(/\d+$/)[0]) - 1;
+            const prev = frontBars[barIndex - 1], next = frontBars[barIndex + 1];
+            dragBarRef.current = {
+              barId: bar.id, faceType: 'front', barIndex, moved: false,
+              startX: x, startY: y, currentX: bar.cx, sc, faceBars: frontBars,
+              minX: prev.cx + prev.r + bar.r + 4,
+              maxX: next.cx - bar.r - next.r - 4,
+            };
+            return;
+          }
+
+          if (/^L[LR]\d+$/.test(bar.id) && nbl > 0) {
+            // Barra lateral arrastrable
+            const latBars = barPosRef.current
+              .filter(b => /^LL\d+$/.test(b.id))
+              .sort((a, b) => parseInt(a.id.slice(2)) - parseInt(b.id.slice(2)));
+            const barIndex = parseInt(bar.id.match(/\d+$/)[0]) - 1;
+            const topCornerY = barPosRef.current.find(b => b.id === 'FT1')?.cy ?? 0;
+            const botCornerY = barPosRef.current.find(b => b.id === 'FB1')?.cy ?? cH;
+            const hitBar = latBars[barIndex];
+            const prevLat = barIndex > 0 ? latBars[barIndex - 1] : null;
+            const nextLat = barIndex < nbl - 1 ? latBars[barIndex + 1] : null;
+            dragBarRef.current = {
+              barId: bar.id, faceType: 'lateral', barIndex, moved: false,
+              startX: x, startY: y, currentY: hitBar.cy, sc, faceBars: latBars,
+              minY: prevLat ? prevLat.cy + prevLat.r + hitBar.r + 4 : topCornerY + hitBar.r + 4,
+              maxY: nextLat ? nextLat.cy - hitBar.r - nextLat.r - 4 : botCornerY - hitBar.r - 4,
+              topCornerY, botCornerY,
+            };
+            return;
+          }
+        }
+        // Barra de esquina u otra estructura: toggle selección directamente
         const next = selectedBars.includes(bar.id)
-          ? selectedBars.filter(id=>id!==bar.id)
+          ? selectedBars.filter(id => id !== bar.id)
           : [...selectedBars, bar.id];
         dispatch({ type: 'SET_SELECTED_BARS', payload: next });
       }
@@ -1131,6 +1248,25 @@ export default function CanvasEditor() {
       return;
     }
 
+    // ── Drag de barra longitudinal ───────────────────────────────
+    if (dragBarRef.current) {
+      const db = dragBarRef.current;
+      const dx = x - db.startX, dy = y - db.startY;
+      if (!db.moved && Math.hypot(dx, dy) > 3) db.moved = true;
+      if (db.moved) {
+        if (db.faceType === 'front') {
+          db.currentX = clamp(db.startX + dx, db.minX, db.maxX);
+        } else {
+          db.currentY = clamp(db.startY + dy, db.minY, db.maxY);
+        }
+        if (cvRef.current) {
+          cvRef.current.style.cursor = db.faceType === 'front' ? 'ew-resize' : 'ns-resize';
+        }
+        fullRedraw();
+      }
+      return;
+    }
+
     // ── Drag vs Click de nota ────────────────────────────────────
     if (dragAnnRef.current) {
       const dx = x - dragAnnRef.current.startX;
@@ -1161,6 +1297,22 @@ export default function CanvasEditor() {
       if ((tool === 'pick' || tool === 'annotate') && cvRef.current) {
         const hitAnn = _hitAnnotation(x, y);
         cvRef.current.style.cursor = hitAnn ? 'pointer' : cursorStyle;
+      }
+      // Cursor de arrastre para barras draggables en pilar-rect sección
+      if (tool === 'select-bar' && struct === 'pilar-rect' && view === 'section' && cvRef.current) {
+        const hitB = _hitBar(x, y);
+        if (hitB) {
+          const nbf = clamp(getParams().bars_front_count || 5, 2, 16);
+          if (/^F[TB]\d+$/.test(hitB.id) && !_isCornerBar(hitB.id, nbf)) {
+            cvRef.current.style.cursor = 'ew-resize';
+          } else if (/^L[LR]\d+$/.test(hitB.id)) {
+            cvRef.current.style.cursor = 'ns-resize';
+          } else {
+            cvRef.current.style.cursor = 'pointer';
+          }
+        } else {
+          cvRef.current.style.cursor = 'default';
+        }
       }
       return;
     }
@@ -1201,6 +1353,30 @@ export default function CanvasEditor() {
     if (dragStirrupRef.current) {
       dragStirrupRef.current = null;
       fullRedraw();
+      return;
+    }
+
+    // ── Soltar barra longitudinal ────────────────────────────────
+    if (dragBarRef.current) {
+      const db = dragBarRef.current;
+      dragBarRef.current = null;
+      if (cvRef.current) cvRef.current.style.cursor = '';
+      if (db.moved) {
+        // Calcular separaciones finales y actualizar formulario
+        const overrideP = _computeOverrideP(getParams());
+        if (db.faceType === 'front') {
+          setFormValue('spacings_front', overrideP.spacings_front);
+        } else {
+          setFormValue('spacings_lateral', overrideP.spacings_lateral);
+        }
+        // setFormValue dispara re-render → fullRedraw automático
+      } else {
+        // Click sin mover: toggle selección
+        const next = selectedBars.includes(db.barId)
+          ? selectedBars.filter(id => id !== db.barId)
+          : [...selectedBars, db.barId];
+        dispatch({ type: 'SET_SELECTED_BARS', payload: next });
+      }
       return;
     }
 
