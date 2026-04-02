@@ -372,6 +372,22 @@ def _draw_concrete_mask(msp, struct_w, struct_h, picado_circles, px_base=0, py_b
         h.paths.add_polyline_path(contour, is_closed=True)
 
 
+def _draw_concrete_mask_circle(msp, R, picado_circles):
+    """
+    Hatch gris sólido con contorno CIRCULAR y agujeros en zonas pintadas.
+    Equivalente a _draw_concrete_mask pero para secciones circulares.
+    Centro en (0, 0), radio R. Usa polígono de 72 vértices para mayor precisión.
+    """
+    n = 72
+    circ_pts = [(R*math.cos(math.radians(i*360/n)), R*math.sin(math.radians(i*360/n))) for i in range(n)]
+    h = msp.add_hatch(dxfattribs={"layer": "HORMIGON"})
+    h.set_solid_fill(color=254)
+    h.dxf.hatch_style = 0  # Normal: exterior lleno, islands vacíos
+    h.paths.add_polyline_path(circ_pts, is_closed=True)
+    for contour in _merge_painted_area(picado_circles):
+        h.paths.add_polyline_path(contour, is_closed=True)
+
+
 def _draw_cracks(msp, cracks, px, py, struct_w, struct_h, target_view='section'):
     if not cracks: return
     for c in cracks:
@@ -1262,23 +1278,30 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
 
     doc,msp=_make_doc()
 
-    # SECCION EN PLANTA (circulo)
-    n36=36
-    circ=[(R*math.cos(math.radians(i*360/n36)),
-           R*math.sin(math.radians(i*360/n36))) for i in range(n36)]
-    _fill_gray(msp,circ)
-
-    # Picado: solo donde el usuario pinto con la brocha
-    # El canvas muestra el circulo centrado: [0,1]x[0,1] = [-R..R] x [-R..R]
+    # SECCION EN PLANTA (circulo) — Gold Standard: repair → bars → concrete mask
     circles = list(getattr(data, 'picked_circles', None) or [])
-    _fill_picado_circles(msp, circles, -R, -R, 2*R, 2*R)
+    circles_section = _to_dxf_circles(circles, -R, -R, 2*R, 2*R, 'section')
 
-    _C(msp,0,0,R,"SECCION",lw=70)
-    _C(msp,0,0,R-cov,"ESTRIBOS",lw=28)
+    # Capa base: fondo blanco + fragmentos en zonas pintadas
+    _draw_repair_texture(msp, circles_section)
+
+    # Estribo / cerco circular interior
+    _C(msp, 0, 0, R-cov, "ESTRIBOS", lw=28)
+
+    # Barras longitudinales — posición con ángulo real (ib[Bx].angle) o distribución uniforme
+    bar_circ_pos = {}
     for i in range(nb):
-        ang=math.radians(360*i/nb+90)
-        bd = _bar_diam(f"B{i+1}", db)
-        _fill_bar(msp,(R-cov)*math.cos(ang),(R-cov)*math.sin(ang),max(.8,bd/20))
+        bid = f"B{i+1}"
+        _ca = (_ib.get(bid) or {}).get('angle')
+        ang = float(_ca) if _ca is not None else math.radians(360*i/nb+90)
+        bd = _bar_diam(bid, db)
+        bx = (R-cov)*math.cos(ang); by = (R-cov)*math.sin(ang)
+        bar_circ_pos[bid] = (bx, by, bd, ang)
+        _fill_bar(msp, bx, by, max(.8, bd/20))
+
+    # Contorno exterior + máscara hormigón circular (encima de barras, huecos en picados)
+    _C(msp, 0, 0, R, "SECCION", lw=70)
+    _draw_concrete_mask_circle(msp, R, circles_section)
 
     _dim_h(msp,-R,R,-R-14,-R,f"%%c{diam:.0f}cm",ht=2.5)
     _note_mtext(msp,R*.7,R*.7,R+25,R*.8,
@@ -1301,10 +1324,14 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
     _wavy_line(msp,AX,zb_a,AX+diam,zb_a,amp=3,waves=4,layer="SECCION",lw=22)
     _rect(msp,AX,AY,diam,VH,"SECCION",lw=70)
 
+    # Barras alzado: usar ángulos reales del dict bar_circ_pos (asimétricos si procede)
+    bar_xs_alz = []
     for i in range(nb):
-        ang=math.radians(360*i/nb+90)
-        bx=AX+R+(R-cov)*math.cos(ang)
-        _L(msp,bx,zb_a-2,bx,zt_a+2,"ARMADURA",lw=max(18,int(_bar_diam(f"B{i+1}",db)*5)))
+        bid = f"B{i+1}"
+        _, _, bd, ang = bar_circ_pos.get(bid, (0, 0, db, math.radians(360*i/nb+90)))
+        bx = AX+R+(R-cov)*math.cos(ang)
+        bar_xs_alz.append(bx)
+        _L(msp,bx,zb_a-2,bx,zt_a+2,"ARMADURA",lw=max(18,int(bd*5)))
     _L(msp,AX,zt_a,AX+diam,zt_a,"ESTRIBOS",lw=25)
     _L(msp,AX,zb_a,AX+diam,zb_a,"ESTRIBOS",lw=25)
 
@@ -1353,6 +1380,22 @@ def generate_dxf_beam(data) -> io.BytesIO:
             return float(entry['diam'])
         return default_diam
 
+    # Separaciones personalizadas (mismo mecanismo que pilar-rect)
+    parsed_bot = _parse_spacings_string(getattr(data, 'spacings_bottom', None))
+    parsed_top = _parse_spacings_string(getattr(data, 'spacings_top', None))
+    use_custom_bot = len(parsed_bot) == nbb - 1
+    use_custom_top = len(parsed_top) == nbt - 1
+
+    def _bot_x(i):
+        if use_custom_bot and i > 0:
+            return cov + sum(parsed_bot[:i])
+        return cov + i * spb
+
+    def _top_x(i):
+        if use_custom_top and i > 0:
+            return cov + sum(parsed_top[:i])
+        return cov + i * spt
+
     doc,msp=_make_doc()
 
     # SECCION TRANSVERSAL
@@ -1364,13 +1407,17 @@ def generate_dxf_beam(data) -> io.BytesIO:
     _rect(msp,0,0,W,H,"SECCION",lw=70)
     _stirrup(msp,cov-ds/20,cov-ds/20,W-2*(cov-ds/20),H-2*(cov-ds/20),rc=.8)
 
-    for i in range(nbb): _fill_bar(msp,cov+i*spb,cov,max(.8,_bar_diam(f"BB{i+1}",dbb)/20))
-    for i in range(nbt): _fill_bar(msp,cov+i*spt,H-cov,max(.8,_bar_diam(f"BT{i+1}",dbt)/20))
+    for i in range(nbb): _fill_bar(msp,_bot_x(i),cov,max(.8,_bar_diam(f"BB{i+1}",dbb)/20))
+    for i in range(nbt): _fill_bar(msp,_top_x(i),H-cov,max(.8,_bar_diam(f"BT{i+1}",dbt)/20))
 
     _dim_h(msp,0,W,-10,0,f"{W:.0f}",ht=2.2)
-    _dim_h(msp,0,cov,-18,0,f"{cov:.0f}",ht=1.8)
-    if nbb>1 and spb>0: _dim_h(msp,cov,cov+spb,-18,0,f"{spb:.0f}",ht=1.8)
-    _dim_h(msp,W-cov,W,-18,0,f"{cov:.0f}",ht=1.8)
+    # Cotas progresivas barras inferiores
+    _bot_xs = [_bot_x(i) for i in range(nbb)]
+    _prog_xs = [0] + _bot_xs + [W]
+    for _k in range(len(_prog_xs)-1):
+        _d = _prog_xs[_k+1] - _prog_xs[_k]
+        if _d > 0.4:
+            _dim_h(msp, _prog_xs[_k], _prog_xs[_k+1], -18, 0, f"{_d:.1f}".rstrip('0').rstrip('.'), ht=1.5)
     _dim_v(msp,0,H,W+12,W,f"{H:.0f}",ht=2.2)
     _dim_v(msp,0,cov,W+20,W,f"{cov:.0f}",ht=1.8)
 

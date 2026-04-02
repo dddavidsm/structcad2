@@ -89,12 +89,14 @@ export const STRUCTS = {
       ]}],
       armadura: [
         { s: 'Armadura inferior', f: [
-          { id: 'bars_bottom_count', l: 'Nº barras', u: 'ud', t: 'n', mn: 2, mx: 10, st: 1, v: 4  },
-          { id: 'bars_bottom_diam',  l: 'Ø barras',  u: 'mm', t: 'n', mn: 6, mx: 40, st: 2, v: 20 },
+          { id: 'bars_bottom_count', l: 'Nº barras',         u: 'ud', t: 'n',  mn: 2, mx: 10, st: 1, v: 4  },
+          { id: 'bars_bottom_diam',  l: 'Ø barras',          u: 'mm', t: 'n',  mn: 6, mx: 40, st: 2, v: 20 },
+          { id: 'spacings_bottom',   l: 'Sep. irregulares',  t: 'tx', v: '', ph: 'ej: 8, 7, 7, 8  (nbb-1 valores)' },
         ]},
         { s: 'Armadura superior', f: [
-          { id: 'bars_top_count', l: 'Nº barras', u: 'ud', t: 'n', mn: 2, mx: 10, st: 1, v: 2  },
-          { id: 'bars_top_diam',  l: 'Ø barras',  u: 'mm', t: 'n', mn: 6, mx: 40, st: 2, v: 16 },
+          { id: 'bars_top_count', l: 'Nº barras',         u: 'ud', t: 'n',  mn: 2, mx: 10, st: 1, v: 2  },
+          { id: 'bars_top_diam',  l: 'Ø barras',          u: 'mm', t: 'n',  mn: 6, mx: 40, st: 2, v: 16 },
+          { id: 'spacings_top',   l: 'Sep. irregulares',  t: 'tx', v: '', ph: 'ej: 13, 13  (nbt-1 valores)' },
         ]},
         { s: 'Estribos', f: [
           { id: 'cover',          l: 'Recub. barras', u: 'cm', t: 'n', mn: 1, mx: 10, st: .5, v: 3  },

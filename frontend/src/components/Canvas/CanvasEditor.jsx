@@ -212,10 +212,11 @@ function drawPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
 
   const brs=[];
   for (let i=0;i<nb;i++) {
-    const ang=2*Math.PI*i/nb-Math.PI/2;
     const bid=`B${i+1}`;
     const bDiam = ib[bid]?.diam || db;
-    brs.push({id:bid,label:bid,cx:cx2+(R-cov)*sc*Math.cos(ang),cy:cy2+(R-cov)*sc*Math.sin(ang),r:barR(bDiam,sc),diam:bDiam,type:'radial'});
+    const defaultAng = 2*Math.PI*i/nb - Math.PI/2;
+    const ang = ib[bid]?.angle !== undefined ? ib[bid].angle : defaultAng;
+    brs.push({id:bid,label:bid,cx:cx2+(R-cov)*sc*Math.cos(ang),cy:cy2+(R-cov)*sc*Math.sin(ang),r:barR(bDiam,sc),diam:bDiam,angle:ang,type:'radial'});
   }
   brs.forEach(b=>barPositionsOut.push(b));
 }
@@ -251,13 +252,33 @@ function drawViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
 
   const spb=nbb>1?(w-2*cov)/(nbb-1):0;
   const spt=nbt>1?(w-2*cov)/(nbt-1):0;
+  const spBotArr = parseSpacings(p.spacings_bottom);
+  const useSpBot = spBotArr && spBotArr.length === nbb - 1;
+  const spTopArr = parseSpacings(p.spacings_top);
+  const useSpTop = spTopArr && spTopArr.length === nbt - 1;
+
+  const bbXs = [];
   for(let i=0;i<nbb;i++) {
+    const xPos = useSpBot ? accumPos(cov, spBotArr, i) : cov + i*spb;
     const bid=`BB${i+1}`; const d=ib[bid]?.diam||dbb;
-    barPositionsOut.push({id:bid,label:bid,cx:ox+(cov+i*spb)*sc,cy:oy+(h-cov)*sc,r:barR(d,sc),diam:d,type:'bottom'});
+    const bx=ox+xPos*sc; bbXs.push(bx);
+    barPositionsOut.push({id:bid,label:bid,cx:bx,cy:oy+(h-cov)*sc,r:barR(d,sc),diam:d,type:'bottom'});
   }
+  const btXs = [];
   for(let i=0;i<nbt;i++) {
+    const xPos = useSpTop ? accumPos(cov, spTopArr, i) : cov + i*spt;
     const bid=`BT${i+1}`; const d=ib[bid]?.diam||dbt;
-    barPositionsOut.push({id:bid,label:bid,cx:ox+(cov+i*spt)*sc,cy:oy+cov*sc,r:barR(d,sc),diam:d,type:'top'});
+    const bx=ox+xPos*sc; btXs.push(bx);
+    barPositionsOut.push({id:bid,label:bid,cx:bx,cy:oy+cov*sc,r:barR(d,sc),diam:d,type:'top'});
+  }
+  // Cotas inter-barras inferiores
+  if (nbb > 1) {
+    const dimYb = oy + h*sc + 14;
+    for(let i=0;i<nbb-1;i++) {
+      const gapPx = bbXs[i+1] - bbXs[i]; if (gapPx < 14) continue;
+      const gapCm = gapPx/sc;
+      dimH(bbXs[i], bbXs[i+1], dimYb, Math.abs(gapCm-Math.round(gapCm))<0.05?String(Math.round(gapCm)):gapCm.toFixed(1));
+    }
   }
 }
 
@@ -366,6 +387,113 @@ function drawEscalera(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   }
   dimH(ox,ox+tread*sc,oy+10,`${tread} cm`);
   dimV(oy-riser*sc,oy,ox-18,`${riser} cm`);
+}
+
+// ── Pilar Circular — Alzado ───────────────────────────────────────
+function drawElevationPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
+  const { fillConcrete, dimH, dimV } = makeDraw(ctx);
+  const diam=clamp(p.diameter||50,20,300), R=diam/2;
+  const cov=clamp(p.cover||4,1,12);
+  const nb=clamp(p.bars_count||8,4,16);
+  const db=clamp(p.bars_diam||20,6,40);
+  const ds=clamp(p.stirrup_diam||8,4,20);
+  const sps=clamp(p.stirrup_spacing||10,5,50);
+  const ih=clamp(p.inspection_height||25,5,150);
+  const ib = p.individualBars || {};
+  const VH=ih+70, marg=30;
+  const M=40;
+  const sc=Math.min((W-M*2)/diam,(H-M*2)/VH);
+  const ox=(W-diam*sc)/2, oy=(H-VH*sc)/2;
+
+  sectionBoundsOut.ox=ox; sectionBoundsOut.oy=oy;
+  sectionBoundsOut.sw=diam*sc; sectionBoundsOut.sh=VH*sc;
+
+  fillConcrete(ox,oy,diam*sc,marg*sc);
+  fillConcrete(ox,oy+(VH-marg)*sc,diam*sc,marg*sc);
+  ctx.fillStyle='rgba(200,200,200,.3)';
+  ctx.fillRect(ox,oy+marg*sc,diam*sc,(VH-2*marg)*sc);
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.strokeRect(ox,oy,diam*sc,VH*sc);
+  ctx.strokeStyle='#ea580c'; ctx.lineWidth=1.2; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(ox,oy+marg*sc); ctx.lineTo(ox+diam*sc,oy+marg*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox,oy+(VH-marg)*sc); ctx.lineTo(ox+diam*sc,oy+(VH-marg)*sc); ctx.stroke();
+  ctx.setLineDash([]);
+
+  const yTop=oy+marg*sc, yBot=oy+(VH-marg)*sc;
+  // Barras: posición X = R + (R-cov)*cos(ang), con ángulo real si está en individualBars
+  for(let i=0;i<nb;i++){
+    const bid=`B${i+1}`;
+    const defaultAng = 2*Math.PI*i/nb - Math.PI/2;
+    const ang = ib[bid]?.angle !== undefined ? ib[bid].angle : defaultAng;
+    const xCm = R + (R-cov)*Math.cos(ang);
+    const bDiam = ib[bid]?.diam || db;
+    const bx = ox+xCm*sc;
+    ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.5,bDiam/16*sc*.4); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(bx,yTop); ctx.lineTo(bx,yBot); ctx.stroke();
+  }
+  // Estribos/cercos horizontales
+  const estX1=ox+cov*sc, estX2=ox+(diam-cov)*sc;
+  ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
+  for(let y=yBot, n=0; y>=yTop-0.5 && n<60; y-=sps*sc, n++){
+    ctx.beginPath(); ctx.moveTo(estX1,y); ctx.lineTo(estX2,y); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  dimH(ox,ox+diam*sc,oy-20,`Ø${diam} cm`);
+  dimV(oy+marg*sc,oy+(VH-marg)*sc,ox+diam*sc+22,`${ih} cm`);
+  dimV(oy,oy+VH*sc,ox+diam*sc+36,`${VH} cm`);
+  ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(`Alzado  (${nb}Ø${db}mm, cerco@${sps}cm)`,ox+diam*sc/2,oy+VH*sc+14);
+}
+
+// ── Viga — Alzado ─────────────────────────────────────────────────
+function drawElevationViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
+  const { fillConcrete, dimH, dimV } = makeDraw(ctx);
+  const w=clamp(p.width||30,15,150), h=clamp(p.height||60,20,300);
+  const cov=clamp(p.cover||3,1,10);
+  const nbb=clamp(p.bars_bottom_count||4,2,10);
+  const dbb=clamp(p.bars_bottom_diam||20,6,40);
+  const nbt=clamp(p.bars_top_count||2,2,6);
+  const dbt=clamp(p.bars_top_diam||16,6,40);
+  const ds=clamp(p.stirrup_diam||8,4,20);
+  const sps=clamp(p.stirrup_spacing||15,5,50);
+  const il=clamp(p.inspection_length||100,5,500);
+  const M=40;
+  const mg=h*.8;  // zonas de hormigón visibles en extremos (80% de la altura)
+  const sc=Math.min((W-M*2)/il,(H-M*2)/h);
+  const ox=(W-il*sc)/2, oy=(H-h*sc)/2;
+
+  sectionBoundsOut.ox=ox; sectionBoundsOut.oy=oy;
+  sectionBoundsOut.sw=il*sc; sectionBoundsOut.sh=h*sc;
+
+  const mgPx=mg*sc;
+  fillConcrete(ox,oy,mgPx,h*sc);
+  fillConcrete(ox+il*sc-mgPx,oy,mgPx,h*sc);
+  ctx.fillStyle='rgba(200,200,200,.3)';
+  ctx.fillRect(ox+mgPx,oy,il*sc-2*mgPx,h*sc);
+  ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=2; ctx.setLineDash([]);
+  ctx.strokeRect(ox,oy,il*sc,h*sc);
+  ctx.strokeStyle='#ea580c'; ctx.lineWidth=1.2; ctx.setLineDash([4,3]);
+  ctx.beginPath(); ctx.moveTo(ox+mgPx,oy); ctx.lineTo(ox+mgPx,oy+h*sc); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ox+il*sc-mgPx,oy); ctx.lineTo(ox+il*sc-mgPx,oy+h*sc); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Barras inferiores e superiores como líneas horiz. a lo largo de la viga
+  ctx.strokeStyle='#155e27'; ctx.lineWidth=Math.max(1.5,dbb/16*sc*.4); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(ox,oy+(h-cov)*sc); ctx.lineTo(ox+il*sc,oy+(h-cov)*sc); ctx.stroke();
+  ctx.lineWidth=Math.max(1.5,dbt/16*sc*.4);
+  ctx.beginPath(); ctx.moveTo(ox,oy+cov*sc); ctx.lineTo(ox+il*sc,oy+cov*sc); ctx.stroke();
+  // Estribos verticales
+  const estY1=oy+cov*sc, estY2=oy+(h-cov)*sc;
+  ctx.strokeStyle='#6d28d9'; ctx.lineWidth=Math.max(1,ds/16*sc*.25); ctx.setLineDash([6,3]);
+  for(let x=ox+mgPx, n=0; x<=ox+il*sc-mgPx+0.5 && n<80; x+=sps*sc, n++){
+    ctx.beginPath(); ctx.moveTo(x,estY1); ctx.lineTo(x,estY2); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  dimH(ox+mgPx,ox+il*sc-mgPx,oy-20,`${il} cm`);
+  dimH(ox,ox+il*sc,oy-32,`total ${(il+2*mg).toFixed(0)} cm`);
+  dimV(oy,oy+h*sc,ox+il*sc+22,`${h} cm`);
+  ctx.fillStyle='#6c757d'; ctx.font=`500 8px ${MONO}`; ctx.textAlign='center';
+  ctx.fillText(`Alzado  (${nbb}Ø${dbb}+${nbt}Ø${dbt}mm, est@${sps}cm)`,ox+il*sc/2,oy+h*sc+14);
 }
 
 // ── Pilar Rect — Vista Alzado (Sección) ───────────────────────────
@@ -939,7 +1067,7 @@ export default function CanvasEditor() {
       const pxPerCm = totalPx / totalCm;
       const gaps = newCxs.slice(1).map((cx, i) => Math.max(0.1, (cx - newCxs[i]) / pxPerCm));
       return { ...p, spacings_front: gaps.map(g => g.toFixed(1)).join(', ') };
-    } else {
+    } else if (db.faceType === 'lateral') {
       const bars = db.faceBars; // LL bars sorted by index
       const newCys = bars.map((b, i) => i === db.barIndex ? db.currentY : b.cy);
       const gaps = newCys.map((cy, i) => {
@@ -947,6 +1075,34 @@ export default function CanvasEditor() {
         return Math.max(0.1, (cy - prevY) / db.sc);
       });
       return { ...p, spacings_lateral: gaps.map(g => g.toFixed(1)).join(', ') };
+    } else if (db.faceType === 'circ-angle') {
+      const ib = { ...(p.individualBars || {}) };
+      ib[db.barId] = { ...(ib[db.barId] || {}), angle: db.currentAngle };
+      return { ...p, individualBars: ib };
+    } else if (db.faceType === 'viga-bottom') {
+      const bars = db.faceBars;
+      const newCxs = bars.map((b, i) => i === db.barIndex ? db.currentX : b.cx);
+      if (newCxs.length < 2) return p;
+      const totalPx = newCxs[newCxs.length-1] - newCxs[0];
+      const w = clamp(p.width||30,15,150), cov2 = clamp(p.cover||3,1,10);
+      const totalCm = w - 2*cov2;
+      if (totalCm<=0||totalPx<=0) return p;
+      const pxPerCm = totalPx/totalCm;
+      const gaps = newCxs.slice(1).map((cx,i) => Math.max(0.5,(cx-newCxs[i])/pxPerCm));
+      return { ...p, spacings_bottom: gaps.map(g=>g.toFixed(1)).join(', ') };
+    } else if (db.faceType === 'viga-top') {
+      const bars = db.faceBars;
+      const newCxs = bars.map((b, i) => i === db.barIndex ? db.currentX : b.cx);
+      if (newCxs.length < 2) return p;
+      const totalPx = newCxs[newCxs.length-1] - newCxs[0];
+      const w = clamp(p.width||30,15,150), cov2 = clamp(p.cover||3,1,10);
+      const totalCm = w - 2*cov2;
+      if (totalCm<=0||totalPx<=0) return p;
+      const pxPerCm = totalPx/totalCm;
+      const gaps = newCxs.slice(1).map((cx,i) => Math.max(0.5,(cx-newCxs[i])/pxPerCm));
+      return { ...p, spacings_top: gaps.map(g=>g.toFixed(1)).join(', ') };
+    } else {
+      return p;
     }
   }
 
@@ -982,7 +1138,7 @@ export default function CanvasEditor() {
 
     const p   = getParams();
     // Durante drag de barra: inyectar separaciones sobreescritas para preview en tiempo real
-    const pDraw = (dragBarRef.current?.moved && struct === 'pilar-rect' && view === 'section')
+    const pDraw = (dragBarRef.current?.moved && view === 'section')
       ? _computeOverrideP(p) : p;
     const bps = [];
     const sb  = { ox: 0, oy: 0, sw: 1, sh: 1 };
@@ -1005,10 +1161,11 @@ export default function CanvasEditor() {
       };
       fn[struct]?.(ctx, pDraw, W, H, bps, sb);
     } else if (view === 'elevation') {
-      if      (struct==='pilar-rect') drawElevationPilarRect(ctx,p,W,H,bps,sb);
-      else if (struct==='viga')       drawViga(ctx,p,W,H,bps,sb);
+      if      (struct==='pilar-rect') drawElevationPilarRect(ctx,pDraw,W,H,bps,sb);
+      else if (struct==='pilar-circ') drawElevationPilarCirc(ctx,p,W,H,bps,sb);
+      else if (struct==='viga')       drawElevationViga(ctx,p,W,H,bps,sb);
       else {
-        const fn={'pilar-circ':drawPilarCirc,'forjado':drawForjado,'zapata':drawZapata,'escalera':drawEscalera};
+        const fn={'forjado':drawForjado,'zapata':drawZapata,'escalera':drawEscalera};
         fn[struct]?.(ctx,p,W,H,bps,sb);
       }
     } else if (view === 'lateral') {
@@ -1231,6 +1388,62 @@ export default function CanvasEditor() {
             return;
           }
         }
+        // ── Pilar circular: arrastrar ángulo de barra ──────────
+        if (struct === 'pilar-circ' && !isElevView && /^B\d+$/.test(bar.id)) {
+          const p2 = getParams();
+          const dpr2 = Math.min(window.devicePixelRatio || 1, 3);
+          const cW2 = cvRef.current.width / dpr2, cH2 = cvRef.current.height / dpr2;
+          const ib2 = p2.individualBars || {};
+          const idx2 = parseInt(bar.id.slice(1)) - 1;
+          const nb2 = clamp(p2.bars_count || 8, 4, 16);
+          const defaultAng2 = 2*Math.PI*idx2/nb2 - Math.PI/2;
+          dragBarRef.current = {
+            barId: bar.id, faceType: 'circ-angle', moved: false,
+            startX: x, startY: y, cx2: cW2/2, cy2: cH2/2,
+            currentAngle: ib2[bar.id]?.angle ?? defaultAng2,
+          };
+          return;
+        }
+
+        // ── Viga: arrastrar barra intermedia inferior/superior ──
+        if (struct === 'viga' && !isElevView) {
+          const pv = getParams();
+          const nbbv = clamp(pv.bars_bottom_count || 4, 2, 10);
+          const nbtv = clamp(pv.bars_top_count || 2, 2, 6);
+          if (/^BB(\d+)$/.test(bar.id)) {
+            const bbi = parseInt(bar.id.slice(2)) - 1;
+            if (bbi > 0 && bbi < nbbv - 1 && nbbv > 2) {
+              const bbBars = barPosRef.current
+                .filter(b => /^BB\d+$/.test(b.id))
+                .sort((a, b2) => parseInt(a.id.slice(2)) - parseInt(b2.id.slice(2)));
+              const minGap = 6;
+              dragBarRef.current = {
+                barId: bar.id, faceType: 'viga-bottom', barIndex: bbi, moved: false,
+                startX: x, startY: y, currentX: bar.cx, faceBars: bbBars,
+                minX: (bbBars[bbi - 1]?.cx ?? 0) + minGap,
+                maxX: (bbBars[bbi + 1]?.cx ?? 9999) - minGap,
+              };
+              return;
+            }
+          }
+          if (/^BT(\d+)$/.test(bar.id)) {
+            const bti = parseInt(bar.id.slice(2)) - 1;
+            if (bti > 0 && bti < nbtv - 1 && nbtv > 2) {
+              const btBars = barPosRef.current
+                .filter(b => /^BT\d+$/.test(b.id))
+                .sort((a, b2) => parseInt(a.id.slice(2)) - parseInt(b2.id.slice(2)));
+              const minGap = 6;
+              dragBarRef.current = {
+                barId: bar.id, faceType: 'viga-top', barIndex: bti, moved: false,
+                startX: x, startY: y, currentX: bar.cx, faceBars: btBars,
+                minX: (btBars[bti - 1]?.cx ?? 0) + minGap,
+                maxX: (btBars[bti + 1]?.cx ?? 9999) - minGap,
+              };
+              return;
+            }
+          }
+        }
+
         // Barra de esquina u otra estructura: toggle selección directamente
         const next = selectedBars.includes(bar.id)
           ? selectedBars.filter(id => id !== bar.id)
@@ -1312,13 +1525,20 @@ export default function CanvasEditor() {
       const dx = x - db.startX, dy = y - db.startY;
       if (!db.moved && Math.hypot(dx, dy) > 3) db.moved = true;
       if (db.moved) {
-        if (db.faceType === 'front') {
+        if (db.faceType === 'front' || db.faceType === 'viga-bottom' || db.faceType === 'viga-top') {
           db.currentX = clamp(db.startX + dx, db.minX, db.maxX);
-        } else {
+        } else if (db.faceType === 'lateral') {
           db.currentY = clamp(db.startY + dy, db.minY, db.maxY);
+        } else if (db.faceType === 'circ-angle') {
+          db.currentAngle = Math.atan2(y - db.cy2, x - db.cx2);
         }
         if (cvRef.current) {
-          cvRef.current.style.cursor = db.faceType === 'front' ? 'ew-resize' : 'ns-resize';
+          const cur = {
+            'front': 'ew-resize', 'lateral': 'ns-resize',
+            'viga-bottom': 'ew-resize', 'viga-top': 'ew-resize',
+            'circ-angle': 'grabbing',
+          };
+          cvRef.current.style.cursor = cur[db.faceType] || 'move';
         }
         fullRedraw();
       }
@@ -1356,15 +1576,29 @@ export default function CanvasEditor() {
         const hitAnn = _hitAnnotation(x, y);
         cvRef.current.style.cursor = hitAnn ? 'pointer' : cursorStyle;
       }
-      // Cursor de arrastre para barras draggables en pilar-rect sección
-      if (tool === 'select-bar' && struct === 'pilar-rect' && view === 'section' && cvRef.current) {
+      // Cursor de arrastre para barras draggables en vista cenital
+      if (tool === 'select-bar' && view === 'section' && cvRef.current) {
         const hitB = _hitBar(x, y);
         if (hitB) {
-          const nbf = clamp(getParams().bars_front_count || 5, 2, 16);
-          if (/^F[TB]\d+$/.test(hitB.id) && !_isCornerBar(hitB.id, nbf)) {
-            cvRef.current.style.cursor = 'ew-resize';
-          } else if (/^L[LR]\d+$/.test(hitB.id)) {
-            cvRef.current.style.cursor = 'ns-resize';
+          const p0 = getParams();
+          if (struct === 'pilar-rect') {
+            const nbf = clamp(p0.bars_front_count || 5, 2, 16);
+            if (/^F[TB]\d+$/.test(hitB.id) && !_isCornerBar(hitB.id, nbf)) {
+              cvRef.current.style.cursor = 'ew-resize';
+            } else if (/^L[LR]\d+$/.test(hitB.id)) {
+              cvRef.current.style.cursor = 'ns-resize';
+            } else {
+              cvRef.current.style.cursor = 'pointer';
+            }
+          } else if (struct === 'pilar-circ') {
+            cvRef.current.style.cursor = /^B\d+$/.test(hitB.id) ? 'grab' : 'pointer';
+          } else if (struct === 'viga') {
+            const nbbh = clamp(p0.bars_bottom_count || 4, 2, 10);
+            const nbth = clamp(p0.bars_top_count || 2, 2, 6);
+            const n0 = parseInt(hitB.id.match(/\d+$/)?.[0] || 0) - 1;
+            cvRef.current.style.cursor =
+              (/^BB\d+$/.test(hitB.id) && n0 > 0 && n0 < nbbh - 1 && nbbh > 2) ? 'ew-resize' :
+              (/^BT\d+$/.test(hitB.id) && n0 > 0 && n0 < nbth - 1 && nbth > 2) ? 'ew-resize' : 'pointer';
           } else {
             cvRef.current.style.cursor = 'pointer';
           }
@@ -1423,8 +1657,14 @@ export default function CanvasEditor() {
         const overrideP = _computeOverrideP(getParams());
         if (db.faceType === 'front') {
           setFormValue('spacings_front', overrideP.spacings_front);
-        } else {
+        } else if (db.faceType === 'lateral') {
           setFormValue('spacings_lateral', overrideP.spacings_lateral);
+        } else if (db.faceType === 'circ-angle') {
+          setFormValue('individualBars', overrideP.individualBars);
+        } else if (db.faceType === 'viga-bottom') {
+          setFormValue('spacings_bottom', overrideP.spacings_bottom);
+        } else if (db.faceType === 'viga-top') {
+          setFormValue('spacings_top', overrideP.spacings_top);
         }
       } else {
         // Click sin mover: toggle selección

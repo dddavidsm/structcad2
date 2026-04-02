@@ -100,6 +100,8 @@ class BeamData(InspectionBase):
     stirrup_diam: float = Field(..., gt=0)
     stirrup_spacing: float = Field(..., gt=0)
     inspection_length: Optional[float] = 25
+    spacings_bottom: Optional[str] = None   # "8,7,7,8" → nbb-1 separaciones armad. inf.
+    spacings_top: Optional[str] = None      # "13,13" → nbt-1 separaciones armad. sup.
     individualBars: Optional[Dict[str, Any]] = {}  # {"BB1": {"diam": 20}, "BT1": {"diam": 16}, ...}
 
 class FootingData(InspectionBase):
