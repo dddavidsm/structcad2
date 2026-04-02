@@ -190,6 +190,7 @@ function drawPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const db=clamp(p.bars_diam||20,6,40);
   const ds=clamp(p.stirrup_diam||8,4,20);
   const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,cov-ds/20),1,10);
+  const ib = p.individualBars || {};
   const M=45;
   const sc=Math.min((W-M*2)/diam,(H-M*2)/diam);
   const cx2=W/2, cy2=H/2;
@@ -212,7 +213,9 @@ function drawPilarCirc(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const brs=[];
   for (let i=0;i<nb;i++) {
     const ang=2*Math.PI*i/nb-Math.PI/2;
-    brs.push({id:`B${i+1}`,label:`B${i+1}`,cx:cx2+(R-cov)*sc*Math.cos(ang),cy:cy2+(R-cov)*sc*Math.sin(ang),r:barR(db,sc),diam:db,type:'radial'});
+    const bid=`B${i+1}`;
+    const bDiam = ib[bid]?.diam || db;
+    brs.push({id:bid,label:bid,cx:cx2+(R-cov)*sc*Math.cos(ang),cy:cy2+(R-cov)*sc*Math.sin(ang),r:barR(bDiam,sc),diam:bDiam,type:'radial'});
   }
   brs.forEach(b=>barPositionsOut.push(b));
 }
@@ -228,6 +231,7 @@ function drawViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const dbt=clamp(p.bars_top_diam||16,6,40);
   const ds=clamp(p.stirrup_diam||8,4,20);
   const cs=clamp(p.cover_stirrup!=null?p.cover_stirrup:Math.max(1.5,cov-ds/20),1,10);
+  const ib = p.individualBars || {};
   const M=45;
   const sc=Math.min((W-M*2)/w,(H-M*2)/h);
   const ox=(W-w*sc)/2, oy=(H-h*sc)/2;
@@ -247,8 +251,14 @@ function drawViga(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
 
   const spb=nbb>1?(w-2*cov)/(nbb-1):0;
   const spt=nbt>1?(w-2*cov)/(nbt-1):0;
-  for(let i=0;i<nbb;i++) barPositionsOut.push({id:`BB${i+1}`,label:`BB${i+1}`,cx:ox+(cov+i*spb)*sc,cy:oy+(h-cov)*sc,r:barR(dbb,sc),diam:dbb,type:'bottom'});
-  for(let i=0;i<nbt;i++) barPositionsOut.push({id:`BT${i+1}`,label:`BT${i+1}`,cx:ox+(cov+i*spt)*sc,cy:oy+cov*sc,r:barR(dbt,sc),diam:dbt,type:'top'});
+  for(let i=0;i<nbb;i++) {
+    const bid=`BB${i+1}`; const d=ib[bid]?.diam||dbb;
+    barPositionsOut.push({id:bid,label:bid,cx:ox+(cov+i*spb)*sc,cy:oy+(h-cov)*sc,r:barR(d,sc),diam:d,type:'bottom'});
+  }
+  for(let i=0;i<nbt;i++) {
+    const bid=`BT${i+1}`; const d=ib[bid]?.diam||dbt;
+    barPositionsOut.push({id:bid,label:bid,cx:ox+(cov+i*spt)*sc,cy:oy+cov*sc,r:barR(d,sc),diam:d,type:'top'});
+  }
 }
 
 // ── Forjado ───────────────────────────────────────────────────────
@@ -259,6 +269,7 @@ function drawForjado(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const cb=clamp(p.cover_bottom||3,2,10);
   const ct=clamp(p.cover_top||3,2,10);
   const dx=clamp(p.bars_x_diam||12,6,32);
+  const ib = p.individualBars || {};
   const M=40;
   const scW=Math.max(1,(W-M*2)/Math.max(th*6,60));
   const sc=Math.min(scW,(H-M*2)/th);
@@ -281,8 +292,10 @@ function drawForjado(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   for(let i=0;i<nBars;i++){
     const bx=ox+i*spx*sc;
     if(bx>ox+secW) break;
-    barPositionsOut.push({id:`BX${i+1}`,label:`BX${i+1}`,cx:bx,cy:oy+(th-cb)*sc,r:barR(dx,sc),diam:dx,type:'bottom-x'});
-    barPositionsOut.push({id:`BXt${i+1}`,label:`BXt${i+1}`,cx:bx,cy:oy+ct*sc,r:barR(dx,sc)*.7,diam:dx,type:'top-x'});
+    const bidB=`BX${i+1}`, bidT=`BXt${i+1}`;
+    const dB=ib[bidB]?.diam||dx, dT=ib[bidT]?.diam||dx;
+    barPositionsOut.push({id:bidB,label:bidB,cx:bx,cy:oy+(th-cb)*sc,r:barR(dB,sc),diam:dB,type:'bottom-x'});
+    barPositionsOut.push({id:bidT,label:bidT,cx:bx,cy:oy+ct*sc,r:barR(dT,sc)*.7,diam:dT,type:'top-x'});
   }
 }
 
@@ -292,6 +305,7 @@ function drawZapata(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const L=clamp(p.length||200,50,600), WW=clamp(p.width||160,50,600);
   const pw=clamp(p.pedestal_w||40,20,100), pd=clamp(p.pedestal_d||40,20,100);
   const cs=clamp(p.cover_sides||7,3,15);
+  const ib = p.individualBars || {};
   const M=40;
   const sc=Math.min((W-M*2)/L,(H-M*2)/WW);
   const ox=(W-L*sc)/2, oy=(H-WW*sc)/2;
@@ -313,8 +327,14 @@ function drawZapata(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const nx=clamp(p.bars_x_count||8,2,20), ny=clamp(p.bars_y_count||7,2,20);
   const spx=nx>1?(L-2*cs)/(nx-1):0, spy=ny>1?(WW-2*cs)/(ny-1):0;
   const dx=clamp(p.bars_x_diam||16,6,40), dy=clamp(p.bars_y_diam||16,6,40);
-  for(let i=0;i<nx;i++) barPositionsOut.push({id:`BX${i+1}`,label:`BX${i+1}`,cx:ox+(cs+i*spx)*sc,cy:oy+WW*sc*.5,r:barR(dx,sc)*.8,diam:dx,type:'x'});
-  for(let i=0;i<ny;i++) barPositionsOut.push({id:`BY${i+1}`,label:`BY${i+1}`,cx:ox+L*sc*.5,cy:oy+(cs+i*spy)*sc,r:barR(dy,sc)*.8,diam:dy,type:'y'});
+  for(let i=0;i<nx;i++) {
+    const bid=`BX${i+1}`; const d=ib[bid]?.diam||dx;
+    barPositionsOut.push({id:bid,label:bid,cx:ox+(cs+i*spx)*sc,cy:oy+WW*sc*.5,r:barR(d,sc)*.8,diam:d,type:'x'});
+  }
+  for(let i=0;i<ny;i++) {
+    const bid=`BY${i+1}`; const d=ib[bid]?.diam||dy;
+    barPositionsOut.push({id:bid,label:bid,cx:ox+L*sc*.5,cy:oy+(cs+i*spy)*sc,r:barR(d,sc)*.8,diam:d,type:'y'});
+  }
 }
 
 // ── Escalera ──────────────────────────────────────────────────────
@@ -326,6 +346,7 @@ function drawEscalera(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
   const n=clamp(p.steps_count||5,3,12);
   const cov=clamp(p.cover||2.5,1.5,6);
   const db=clamp(p.bars_long_diam||12,6,20);
+  const ib = p.individualBars || {};
   const M=30;
   const tw=n*tread, tH=n*riser+th;
   const sc=Math.min((W-M*2)/tw,(H-M*2)/tH);
@@ -340,7 +361,8 @@ function drawEscalera(ctx, p, W, H, barPositionsOut, sectionBoundsOut) {
     ctx.fillRect(px,py,tread*sc,riser*sc);
     ctx.strokeStyle='#1a1a1a'; ctx.lineWidth=1.5; ctx.setLineDash([]);
     ctx.strokeRect(px,py,tread*sc,riser*sc);
-    barPositionsOut.push({id:`ES${i+1}`,label:`ES${i+1}`,cx:px+tread*sc*.5,cy:py+riser*sc*.5,r:barR(db,sc)*.7,diam:db,type:'long'});
+    const bid=`ES${i+1}`; const d=ib[bid]?.diam||db;
+    barPositionsOut.push({id:bid,label:bid,cx:px+tread*sc*.5,cy:py+riser*sc*.5,r:barR(d,sc)*.7,diam:d,type:'long'});
   }
   dimH(ox,ox+tread*sc,oy+10,`${tread} cm`);
   dimV(oy-riser*sc,oy,ox-18,`${riser} cm`);

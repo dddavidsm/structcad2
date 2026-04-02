@@ -81,9 +81,11 @@ class PillarCircData(InspectionBase):
     bars_count: int = Field(..., ge=4, le=16)
     bars_diam: float = Field(..., gt=0)
     cover: float = Field(..., gt=0)
+    cover_stirrup: Optional[float] = None
     stirrup_diam: float = Field(..., gt=0)
     stirrup_spacing: Optional[float] = 10
     inspection_height: float = Field(..., gt=0)
+    individualBars: Optional[Dict[str, Any]] = {}  # {"B1": {"diam": 25}, ...}
 
 class BeamData(InspectionBase):
     width: float = Field(..., gt=0)
@@ -94,9 +96,11 @@ class BeamData(InspectionBase):
     bars_top_count: int = Field(..., ge=2, le=6)
     bars_top_diam: float = Field(..., gt=0)
     cover: float = Field(..., gt=0)
+    cover_stirrup: Optional[float] = None
     stirrup_diam: float = Field(..., gt=0)
     stirrup_spacing: float = Field(..., gt=0)
     inspection_length: Optional[float] = 25
+    individualBars: Optional[Dict[str, Any]] = {}  # {"BB1": {"diam": 20}, "BT1": {"diam": 16}, ...}
 
 class FootingData(InspectionBase):
     length: float = Field(..., gt=0)
@@ -110,6 +114,7 @@ class FootingData(InspectionBase):
     bars_y_diam: float = Field(..., gt=0)
     cover_bottom: float = Field(..., gt=0)
     cover_sides: float = Field(..., gt=0)
+    individualBars: Optional[Dict[str, Any]] = {}  # {"BX1": {"diam": 16}, ...}
 
 class ForjadoData(InspectionBase):
     thickness: float = Field(..., gt=0)
@@ -125,6 +130,7 @@ class ForjadoData(InspectionBase):
     cover_bottom: float = Field(..., gt=0)
     cover_top: float = Field(..., gt=0)
     inspection_area: Optional[float] = 400
+    individualBars: Optional[Dict[str, Any]] = {}  # {"BX1": {"diam": 12}, ...}
 
 class StairData(InspectionBase):
     stair_width: float = Field(..., gt=0)
@@ -140,6 +146,7 @@ class StairData(InspectionBase):
     cover: float = Field(..., gt=0)
     relleno_type: Optional[str] = "Mortero/Cascote"
     depth_no_rebar: Optional[float] = None
+    individualBars: Optional[Dict[str, Any]] = {}  # {"ES1": {"diam": 12}, ...}
 
 def _stream(buf: io.BytesIO, filename: str) -> Response:
     buf.seek(0)

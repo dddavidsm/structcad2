@@ -1253,6 +1253,13 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
     ih   = float(data.inspection_height)
     rb   = max(.8,db/20)
 
+    _ib = getattr(data, 'individualBars', None) or {}
+    def _bar_diam(bar_id, default_diam):
+        entry = _ib.get(bar_id)
+        if isinstance(entry, dict) and entry.get('diam'):
+            return float(entry['diam'])
+        return default_diam
+
     doc,msp=_make_doc()
 
     # SECCION EN PLANTA (circulo)
@@ -1270,11 +1277,12 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
     _C(msp,0,0,R-cov,"ESTRIBOS",lw=28)
     for i in range(nb):
         ang=math.radians(360*i/nb+90)
-        _fill_bar(msp,(R-cov)*math.cos(ang),(R-cov)*math.sin(ang),rb)
+        bd = _bar_diam(f"B{i+1}", db)
+        _fill_bar(msp,(R-cov)*math.cos(ang),(R-cov)*math.sin(ang),max(.8,bd/20))
 
     _dim_h(msp,-R,R,-R-14,-R,f"%%c{diam:.0f}cm",ht=2.5)
-    _note(msp,R*.7,R*.7,R+25,R*.8,
-          [f"{nb}Ø{db:.0f}mm long.",f"Espiral Ø{ds:.0f}mm",f"Recub: {cov:.0f}cm"])
+    _note_mtext(msp,R*.7,R*.7,R+25,R*.8,
+          [f"{nb}%%c{db:.0f}mm long.",f"Espiral %%c{ds:.0f}mm",f"Recub: {cov:.0f}cm"])
     _title(msp,0,R+10,"SECCION EN PLANTA")
 
     # ALZADO
@@ -1296,7 +1304,7 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
     for i in range(nb):
         ang=math.radians(360*i/nb+90)
         bx=AX+R+(R-cov)*math.cos(ang)
-        _L(msp,bx,zb_a-2,bx,zt_a+2,"ARMADURA",lw=max(18,int(db*5)))
+        _L(msp,bx,zb_a-2,bx,zt_a+2,"ARMADURA",lw=max(18,int(_bar_diam(f"B{i+1}",db)*5)))
     _L(msp,AX,zt_a,AX+diam,zt_a,"ESTRIBOS",lw=25)
     _L(msp,AX,zb_a,AX+diam,zb_a,"ESTRIBOS",lw=25)
 
@@ -1304,6 +1312,18 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
     _dim_v(msp,zb_a,zt_a,AX+diam+12,AX+diam,f"{ih:.0f}",ht=2.0)
     _dim_v(msp,AY,AY+VH,AX+diam+20,AX+diam,f"{VH:.0f}",ht=2.0)
     _title(msp,AX+R,AY-24,"ALZADO")
+    for _un in list(getattr(data, 'user_notes', None) or []):
+        try:
+            _nx = float(_un.get('nx', 0)); _ny = float(_un.get('ny', 0))
+            txt  = _a(str(_un.get('text', '')))
+            if not txt: continue
+            nview = _un.get('view', 'section')
+            if nview == 'elevation':
+                _dx = AX + _nx * diam; _dy = AY + (1.0-_ny) * VH
+            else:
+                _dx = -R + _nx * diam; _dy = -R + (1.0-_ny) * diam
+            msp.add_mtext(txt, dxfattribs={"layer":"TEXTO","char_height":2.5,"insert":(_dx,_dy),"width":45,"attachment_point":7})
+        except Exception: continue
     _cajetin(msp,AX+diam+30,AY-55,_caj(data))
     return _out(doc)
 
@@ -1326,6 +1346,13 @@ def generate_dxf_beam(data) -> io.BytesIO:
     spb=(W-2*cov)/(nbb-1) if nbb>1 else 0
     spt=(W-2*cov)/(nbt-1) if nbt>1 else 0
 
+    _ib = getattr(data, 'individualBars', None) or {}
+    def _bar_diam(bar_id, default_diam):
+        entry = _ib.get(bar_id)
+        if isinstance(entry, dict) and entry.get('diam'):
+            return float(entry['diam'])
+        return default_diam
+
     doc,msp=_make_doc()
 
     # SECCION TRANSVERSAL
@@ -1337,8 +1364,8 @@ def generate_dxf_beam(data) -> io.BytesIO:
     _rect(msp,0,0,W,H,"SECCION",lw=70)
     _stirrup(msp,cov-ds/20,cov-ds/20,W-2*(cov-ds/20),H-2*(cov-ds/20),rc=.8)
 
-    for i in range(nbb): _fill_bar(msp,cov+i*spb,cov,max(.8,dbb/20))
-    for i in range(nbt): _fill_bar(msp,cov+i*spt,H-cov,max(.8,dbt/20))
+    for i in range(nbb): _fill_bar(msp,cov+i*spb,cov,max(.8,_bar_diam(f"BB{i+1}",dbb)/20))
+    for i in range(nbt): _fill_bar(msp,cov+i*spt,H-cov,max(.8,_bar_diam(f"BT{i+1}",dbt)/20))
 
     _dim_h(msp,0,W,-10,0,f"{W:.0f}",ht=2.2)
     _dim_h(msp,0,cov,-18,0,f"{cov:.0f}",ht=1.8)
@@ -1347,10 +1374,10 @@ def generate_dxf_beam(data) -> io.BytesIO:
     _dim_v(msp,0,H,W+12,W,f"{H:.0f}",ht=2.2)
     _dim_v(msp,0,cov,W+20,W,f"{cov:.0f}",ht=1.8)
 
-    _note(msp,W*.7,cov,W+28,H*.15,
-          [f"Est. Ø{ds:.0f}mm @{sps:.0f}cm",
-           f"{nbt}Ø{dbt:.0f}mm armad. sup.",
-           f"{nbb}Ø{dbb:.0f}mm armad. inf.",
+    _note_mtext(msp,W*.7,cov,W+28,H*.15,
+          [f"Est. %%c{ds:.0f}mm @{sps:.0f}cm",
+           f"{nbt}%%c{dbt:.0f}mm armad. sup.",
+           f"{nbb}%%c{dbb:.0f}mm armad. inf.",
            f"Recubrimiento: {cov:.0f}cm"])
     _title(msp,W/2,H+10,"SECCION TRANSVERSAL")
 
@@ -1387,6 +1414,18 @@ def generate_dxf_beam(data) -> io.BytesIO:
     _dim_h(msp,AX+mg,AX+mg+sps,AY+H+6,AY+H,f"{sps:.0f}",ht=1.8)
 
     _title(msp,AX+TL/2,AY+H+12,"ALZADO (ZONA INSPECCION)")
+    for _un in list(getattr(data, 'user_notes', None) or []):
+        try:
+            _nx = float(_un.get('nx', 0)); _ny = float(_un.get('ny', 0))
+            txt  = _a(str(_un.get('text', '')))
+            if not txt: continue
+            nview = _un.get('view', 'section')
+            if nview == 'elevation':
+                _dx = AX + _nx * TL; _dy = AY + (1.0-_ny) * H
+            else:
+                _dx = _nx * W; _dy = (1.0-_ny) * H
+            msp.add_mtext(txt, dxfattribs={"layer":"TEXTO","char_height":2.5,"insert":(_dx,_dy),"width":45,"attachment_point":7})
+        except Exception: continue
     _cajetin(msp,AX+TL+12,AY-55,_caj(data))
     return _out(doc)
 
@@ -1446,7 +1485,7 @@ def generate_dxf_forjado(data) -> io.BytesIO:
     _T(msp,SX-2,SY+cb,1.8,f"r.inf={cb:.1f}cm","COTAS",TextEntityAlignment.RIGHT)
     _T(msp,SX-2,SY+th-ct,1.8,f"r.sup={ct:.1f}cm","COTAS",TextEntityAlignment.RIGHT)
 
-    _note(msp,SX+WR*.6,SY+th*.55,SX+WR+28,SY+th*.7,
+    _note_mtext(msp,SX+WR*.6,SY+th*.55,SX+WR+28,SY+th*.7,
           [f"r.inf={cb:.0f} / r.sup={ct:.0f}cm",
            f"Y: {ny} %%c{dy:.0f}@{spy:.0f}cm",
            f"X: {nx} %%c{dx:.0f}@{spx:.0f}cm"])
@@ -1483,6 +1522,18 @@ def generate_dxf_forjado(data) -> io.BytesIO:
     _dim_v(msp,PLY,PLY+HR,xcp+8,PLX+WR,f"{HR:.0f}",ht=2.2)
 
     _title(msp,PLX+WR/2,PLY+HR+10,"PLANTA ARMADURA")
+    for _un in list(getattr(data, 'user_notes', None) or []):
+        try:
+            _nx = float(_un.get('nx', 0)); _ny = float(_un.get('ny', 0))
+            txt  = _a(str(_un.get('text', '')))
+            if not txt: continue
+            nview = _un.get('view', 'plan')
+            if nview == 'plan':
+                _dx = PLX + _nx * WR; _dy = PLY + (1.0-_ny) * HR
+            else:
+                _dx = SX + _nx * WR; _dy = SY + (1.0-_ny) * th
+            msp.add_mtext(txt, dxfattribs={"layer":"TEXTO","char_height":2.5,"insert":(_dx,_dy),"width":45,"attachment_point":7})
+        except Exception: continue
     _cajetin(msp,PLX+WR+25,PLY-55,_caj(data))
     return _out(doc)
 
@@ -1523,7 +1574,7 @@ def generate_dxf_footing(data) -> io.BytesIO:
     _dim_h(msp,0,cs,-18,0,f"{cs:.0f}",ht=1.8)
     if nx>1 and spx>0: _dim_h(msp,cs,cs+spx,-18,0,f"{spx:.0f}",ht=1.8)
     _dim_v(msp,0,WW,L+12,L,f"{WW:.0f}",ht=2.5)
-    _note(msp,L*.75,WW*.75,L+30,WW*.7,
+    _note_mtext(msp,L*.75,WW*.75,L+30,WW*.7,
           [f"{nx} %%c{dx:.0f} dir.X",f"{ny} %%c{dy:.0f} dir.Y",
            f"r.lat={cs:.0f} / r.inf={cb:.0f}cm"])
     _title(msp,L/2,WW+10,"PLANTA ARMADURA")
@@ -1546,7 +1597,20 @@ def generate_dxf_footing(data) -> io.BytesIO:
     _dim_h(msp,SYX,SYX+WW,SYY-10,SYY,f"{WW:.0f}",ht=2.2)
     _dim_v(msp,SYY,SYY+H,SYX+WW+12,SYX+WW,f"{H:.0f}",ht=2.2)
     _title(msp,SYX+WW/2,SYY+H+8,"SECCION Y-Y")
-
+    for _un in list(getattr(data, 'user_notes', None) or []):
+        try:
+            _nx = float(_un.get('nx', 0)); _ny = float(_un.get('ny', 0))
+            txt  = _a(str(_un.get('text', '')))
+            if not txt: continue
+            nview = _un.get('view', 'plan')
+            if nview == 'sectionX':
+                _dx = SX + _nx * L; _dy = SY + (1.0-_ny) * H
+            elif nview == 'sectionY':
+                _dx = SYX + _nx * WW; _dy = SYY + (1.0-_ny) * H
+            else:
+                _dx = _nx * L; _dy = (1.0-_ny) * WW
+            msp.add_mtext(txt, dxfattribs={"layer":"TEXTO","char_height":2.5,"insert":(_dx,_dy),"width":45,"attachment_point":7})
+        except Exception: continue
     _cajetin(msp,SYX+WW+20,SYY-55,_caj(data))
     return _out(doc)
 
@@ -1607,9 +1671,18 @@ def generate_dxf_stair(data) -> io.BytesIO:
     _dim_h(msp,ox,ox+tread,oy+th+8,oy,f"{tread:.0f}",ht=2.0)
     _dim_v(msp,oy-riser,oy,ox-12,ox,f"{riser:.0f}",ht=2.0)
     _dim_v(msp,be[1],be[1]+th,ox+n*tread+12,ox+n*tread,f"{th:.0f}",ht=2.0)
-    _note(msp,ox+n*tread*.5,oy-n*riser*.35,ox+n*tread+28,oy-n*riser*.5,
+    _note_mtext(msp,ox+n*tread*.5,oy-n*riser*.35,ox+n*tread+28,oy-n*riser*.5,
           [f"Long: %%c{dl:.0f}@{sl:.0f}cm",
            f"Trans: %%c{dt:.0f}@{st:.0f}cm",f"Recub: {cov:.0f}cm"])
     _title(msp,ox+n*tread/2,oy+th+20,"SECCION LONGITUDINAL - ZANCA")
+    for _un in list(getattr(data, 'user_notes', None) or []):
+        try:
+            _nx = float(_un.get('nx', 0)); _ny = float(_un.get('ny', 0))
+            txt  = _a(str(_un.get('text', '')))
+            if not txt: continue
+            _dx = ox + _nx * n * tread
+            _dy = (oy - n * riser) + (1.0-_ny) * (n * riser + th)
+            msp.add_mtext(txt, dxfattribs={"layer":"TEXTO","char_height":2.5,"insert":(_dx,_dy),"width":45,"attachment_point":7})
+        except Exception: continue
     _cajetin(msp,ox+n*tread+18,oy-n*riser-55,_caj(data))
     return _out(doc)
