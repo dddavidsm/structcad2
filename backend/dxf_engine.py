@@ -377,6 +377,8 @@ def _draw_concrete_mask_circle(msp, R, picado_circles):
     Hatch gris sólido con contorno CIRCULAR y agujeros en zonas pintadas.
     Equivalente a _draw_concrete_mask pero para secciones circulares.
     Centro en (0, 0), radio R. Usa polígono de 72 vértices para mayor precisión.
+    Los "islands" (zonas picadas) se recortan al interior del círculo con Shapely
+    para que AutoCAD no los ignore al estar parcialmente fuera del contorno exterior.
     """
     n = 72
     circ_pts = [(R*math.cos(math.radians(i*360/n)), R*math.sin(math.radians(i*360/n))) for i in range(n)]
@@ -384,8 +386,17 @@ def _draw_concrete_mask_circle(msp, R, picado_circles):
     h.set_solid_fill(color=254)
     h.dxf.hatch_style = 0  # Normal: exterior lleno, islands vacíos
     h.paths.add_polyline_path(circ_pts, is_closed=True)
-    for contour in _merge_painted_area(picado_circles):
-        h.paths.add_polyline_path(contour, is_closed=True)
+
+    if picado_circles:
+        # Recortar cada zona pintada al interior del círculo antes de añadirla como island
+        circle_shape = Point(0, 0).buffer(R, resolution=36)
+        polys = [Point(cx, cy).buffer(r, resolution=16) for cx, cy, r in picado_circles]
+        merged = unary_union(polys)
+        clipped = merged.intersection(circle_shape)
+        geoms = list(clipped.geoms) if isinstance(clipped, MultiPolygon) else ([clipped] if not clipped.is_empty else [])
+        for geom in geoms:
+            if geom.is_valid and geom.area > 0.01:
+                h.paths.add_polyline_path(list(geom.exterior.coords), is_closed=True)
 
 
 def _draw_cracks(msp, cracks, px, py, struct_w, struct_h, target_view='section'):
@@ -1308,37 +1319,52 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
           [f"{nb}%%c{db:.0f}mm long.",f"Espiral %%c{ds:.0f}mm",f"Recub: {cov:.0f}cm"])
     _title(msp,0,R+10,"SECCION EN PLANTA")
 
-    # ALZADO
-    AX=-(R+22); AY=-(ih+90); VH=ih+70; mg=32
-    zt_a=AY+VH-mg; zb_a=AY+mg
+    # ── ALZADO ───────────────────────────────────────────────────
+    # Layout: a la derecha de la sección, sin solaparse.
+    # Sección ocupa [-R..R] horizontalmente. Alzado empieza en AX = R+40.
+    AX = R + 40.0
+    VH = ih + 70; mg = 32
+    AY = -(VH / 2.0)          # centrado verticalmente con la sección
+    zt_a = AY + VH - mg
+    zb_a = AY + mg
 
-    _fill_gray(msp,_rpts(AX,AY+VH-mg,diam,mg))
-    _fill_gray(msp,_rpts(AX,AY,diam,mg))
+    circles_alz = _to_dxf_circles(circles, AX, AY, diam, VH, 'elevation')
 
-    wp_at=_wavy_pts(AX,zt_a,AX+diam,zt_a,amp=3,waves=4)
-    wp_ab=_wavy_pts(AX,zb_a,AX+diam,zb_a,amp=3,waves=4)
-    pic_a=wp_at+[(AX+diam,zb_a)]+list(reversed(wp_ab))+[(AX,zt_a)]
-    _fill_picado(msp,pic_a)
+    # Paso 1: textura de reparación (fondo blanco + fragmentos) donde el usuario pintó
+    _draw_repair_texture(msp, circles_alz)
 
-    _wavy_line(msp,AX,zt_a,AX+diam,zt_a,amp=3,waves=4,layer="SECCION",lw=22)
-    _wavy_line(msp,AX,zb_a,AX+diam,zb_a,amp=3,waves=4,layer="SECCION",lw=22)
-    _rect(msp,AX,AY,diam,VH,"SECCION",lw=70)
+    # Paso 2: contorno y relleno hormigón intacto (máscara con agujeros)
+    _rect(msp, AX, AY, diam, VH, "SECCION", lw=70)
+    _draw_concrete_mask(msp, diam, VH, circles_alz, AX, AY)
 
-    # Barras alzado: usar ángulos reales del dict bar_circ_pos (asimétricos si procede)
+    # Líneas de límite zona inspeccionada
+    _L(msp, AX, zt_a, AX+diam, zt_a, "COTAS", lw=13)
+    _L(msp, AX, zb_a, AX+diam, zb_a, "COTAS", lw=13)
+
+    # Barras longitudinales con ángulos reales
     bar_xs_alz = []
     for i in range(nb):
         bid = f"B{i+1}"
         _, _, bd, ang = bar_circ_pos.get(bid, (0, 0, db, math.radians(360*i/nb+90)))
-        bx = AX+R+(R-cov)*math.cos(ang)
+        bx = AX + R + (R-cov)*math.cos(ang)
         bar_xs_alz.append(bx)
-        _L(msp,bx,zb_a-2,bx,zt_a+2,"ARMADURA",lw=max(18,int(bd*5)))
-    _L(msp,AX,zt_a,AX+diam,zt_a,"ESTRIBOS",lw=25)
-    _L(msp,AX,zb_a,AX+diam,zb_a,"ESTRIBOS",lw=25)
+        _draw_thick_vertical_bar(msp, bx, AY+2, AY+VH-2, bd/10)
 
-    _dim_h(msp,AX,AX+diam,AY-12,AY,f"%%c{diam:.0f}cm",ht=2.2)
-    _dim_v(msp,zb_a,zt_a,AX+diam+12,AX+diam,f"{ih:.0f}",ht=2.0)
-    _dim_v(msp,AY,AY+VH,AX+diam+20,AX+diam,f"{VH:.0f}",ht=2.0)
-    _title(msp,AX+R,AY-24,"ALZADO")
+    # Estribos en zona de inspección
+    stirrup_spacing = max(1.0, float(getattr(data, 'stirrup_spacing', None) or ih/5))
+    _est_x1 = AX + cov; _est_x2 = AX + diam - cov
+    y_s = zb_a
+    while y_s <= zt_a + 0.001:
+        _L(msp, _est_x1, y_s, _est_x2, y_s, "ESTRIBOS", lw=25)
+        y_s += stirrup_spacing
+
+    _dim_h(msp, AX, AX+diam, AY-12, AY, f"%%c{diam:.0f}cm", ht=2.2)
+    _dim_v(msp, zb_a, zt_a, AX+diam+12, AX+diam, f"{ih:.0f}", ht=2.0)
+    _dim_v(msp, AY, AY+VH, AX+diam+22, AX+diam, f"{VH:.0f}", ht=2.0)
+    _note_mtext(msp, AX-1, (zt_a+zb_a)/2,
+                AX-38, (zt_a+zb_a)/2+5,
+                [f"{nb}%%c{db:.0f}mm long.", f"Espiral %%c{ds:.0f}mm@{stirrup_spacing:.0f}cm", f"Recub: {cov:.0f}cm"])
+    _title(msp, AX+R, AY-24, "ALZADO")
     for _un in list(getattr(data, 'user_notes', None) or []):
         try:
             _nx = float(_un.get('nx', 0)); _ny = float(_un.get('ny', 0))
@@ -1351,7 +1377,7 @@ def generate_dxf_pillar_circ(data) -> io.BytesIO:
                 _dx = -R + _nx * diam; _dy = -R + (1.0-_ny) * diam
             msp.add_mtext(txt, dxfattribs={"layer":"TEXTO","char_height":2.5,"insert":(_dx,_dy),"width":45,"attachment_point":7})
         except Exception: continue
-    _cajetin(msp,AX+diam+30,AY-55,_caj(data))
+    _cajetin(msp, AX+diam+30, AY-55, _caj(data))
     return _out(doc)
 
 
@@ -1398,17 +1424,19 @@ def generate_dxf_beam(data) -> io.BytesIO:
 
     doc,msp=_make_doc()
 
-    # SECCION TRANSVERSAL
-    _fill_gray(msp,_rpts(0,0,W,H))
-    # Picado: solo donde el usuario pinto con la brocha
+    # ── SECCION TRANSVERSAL ──────────────────────────────────────
     circles = list(getattr(data, 'picked_circles', None) or [])
-    _fill_picado_circles(msp, circles, 0, 0, W, H)
+    cracks = list(getattr(data, 'cracks_data', None) or [])
+    circles_section = _to_dxf_circles(circles, 0, 0, W, H, 'section')
 
-    _rect(msp,0,0,W,H,"SECCION",lw=70)
+    # Gold-standard: repair texture → bars → outline → concrete mask
+    _draw_repair_texture(msp, circles_section)
     _stirrup(msp,cov-ds/20,cov-ds/20,W-2*(cov-ds/20),H-2*(cov-ds/20),rc=.8)
-
     for i in range(nbb): _fill_bar(msp,_bot_x(i),cov,max(.8,_bar_diam(f"BB{i+1}",dbb)/20))
     for i in range(nbt): _fill_bar(msp,_top_x(i),H-cov,max(.8,_bar_diam(f"BT{i+1}",dbt)/20))
+    _rect(msp,0,0,W,H,"SECCION",lw=70)
+    _draw_concrete_mask(msp, W, H, circles_section, 0, 0)
+    _draw_cracks(msp, cracks, 0, 0, W, H, 'section')
 
     _dim_h(msp,0,W,-10,0,f"{W:.0f}",ht=2.2)
     # Cotas progresivas barras inferiores
@@ -1428,32 +1456,28 @@ def generate_dxf_beam(data) -> io.BytesIO:
            f"Recubrimiento: {cov:.0f}cm"])
     _title(msp,W/2,H+10,"SECCION TRANSVERSAL")
 
-    # ALZADO LONGITUDINAL
+    # ── ALZADO LONGITUDINAL ──────────────────────────────────────
     mg=H*.8; TL=il+2*mg
     AX=W+52; AY=0.0
 
-    _fill_gray(msp,_rpts(AX,AY,mg,H))
-    _fill_gray(msp,_rpts(AX+mg+il,AY,mg,H))
+    circles_alz = _to_dxf_circles(circles, AX, AY, TL, H, 'elevation')
 
-    wp_at=_wavy_pts(AX+mg,AY+H,AX+mg+il,AY+H,amp=3,waves=5)
-    wp_ab=_wavy_pts(AX+mg,AY,AX+mg+il,AY,amp=3,waves=5)
-    pic_a=(wp_at+[(AX+mg+il,AY)]+list(reversed(wp_ab))+[(AX+mg,AY+H)])
-    _fill_picado(msp,pic_a)
-
-    _wavy_line(msp,AX+mg,AY+H,AX+mg+il,AY+H,amp=3,waves=5,layer="SECCION",lw=22)
-    _wavy_line(msp,AX+mg,AY,  AX+mg+il,AY,  amp=3,waves=5,layer="SECCION",lw=22)
-    _L(msp,AX+mg,AY,AX+mg,AY+H,"SECCION",lw=20)
-    _L(msp,AX+mg+il,AY,AX+mg+il,AY+H,"SECCION",lw=20)
-    _rect(msp,AX,AY,TL,H,"SECCION",lw=70)
-
+    # Gold-standard: repair → bars → outline → concrete mask
+    _draw_repair_texture(msp, circles_alz)
     _L(msp,AX,AY+cov,AX+TL,AY+cov,"ARMADURA",lw=max(18,int(dbb*5)))
     _L(msp,AX,AY+H-cov,AX+TL,AY+H-cov,"ARMADURA",lw=max(18,int(dbt*5)))
-
     ns=int(TL/sps)+2
     for i in range(ns):
         sx=AX+i*sps
         if sx>AX+TL: break
         _L(msp,sx,AY+cov-1,sx,AY+H-cov+1,"ESTRIBOS",lw=22)
+    _rect(msp,AX,AY,TL,H,"SECCION",lw=70)
+    _draw_concrete_mask(msp, TL, H, circles_alz, AX, AY)
+    _draw_cracks(msp, cracks, AX, AY, TL, H, 'elevation')
+
+    # Líneas separadoras zona inspeccionada
+    _L(msp,AX+mg,AY,AX+mg,AY+H,"COTAS",lw=13)
+    _L(msp,AX+mg+il,AY,AX+mg+il,AY+H,"COTAS",lw=13)
 
     _dim_h(msp,AX+mg,AX+mg+il,AY-10,AY,f"{il:.0f}",ht=2.2)
     _dim_h(msp,AX,AX+TL,AY-18,AY,f"total {TL:.0f}",ht=2.0)
@@ -1501,15 +1525,11 @@ def generate_dxf_forjado(data) -> io.BytesIO:
     # ── SECCION TRANSVERSAL ──────────────────────────────────────
     SX,SY=0.0,0.0
 
-    # Intacto: toda la seccion
-    _fill_gray(msp,_rpts(SX,SY,WR,th))
-
-    # Picado: solo donde el usuario pinto con la brocha
     circles = list(getattr(data, 'picked_circles', None) or [])
-    _fill_picado_circles(msp, circles, SX, SY, WR, th)
+    circles_sec = _to_dxf_circles(circles, SX, SY, WR, th, 'section')
 
-    _rect(msp,SX,SY,WR,th,"SECCION",lw=70)
-
+    # Gold-standard: repair texture → bars → outline → concrete mask
+    _draw_repair_texture(msp, circles_sec)
     rx=max(.7,dx/20); ry=max(.6,dy/20)
     for i in range(nsx):
         bx=SX+10+i*spx
@@ -1518,6 +1538,8 @@ def generate_dxf_forjado(data) -> io.BytesIO:
         _fill_bar(msp,bx,SY+th-ct,rx)
         _fill_bar(msp,bx,SY+cb+rx*2.5,ry*.7)
         _fill_bar(msp,bx,SY+th-ct-rx*2.5,ry*.7)
+    _rect(msp,SX,SY,WR,th,"SECCION",lw=70)
+    _draw_concrete_mask(msp, WR, th, circles_sec, SX, SY)
 
     # Cotas seccion
     _T(msp,SX+WR/2,SY-6,2.2,f"rep. {WR:.0f} cm","TEXTO",
@@ -1540,15 +1562,12 @@ def generate_dxf_forjado(data) -> io.BytesIO:
     _title(msp,SX+WR/2,SY+th+10,"SECCION TRANSVERSAL")
 
     # ── PLANTA ARMADURA ──────────────────────────────────────────
-    PLX=0.0; PLY=-(HR+48); bw=8
+    PLX=0.0; PLY=-(HR+48)
 
-    # Intacto: toda la planta
-    _fill_gray(msp,_rpts(PLX,PLY,WR,HR))
+    circles_plan = _to_dxf_circles(circles, PLX, PLY, WR, HR, 'plan')
 
-    # Picado: solo donde el usuario pinto con la brocha
-    _fill_picado_circles(msp, circles, PLX, PLY, WR, HR)
-    _rect(msp,PLX,PLY,WR,HR,"SECCION",lw=70)
-
+    # Gold-standard: repair → bars → outline → concrete mask
+    _draw_repair_texture(msp, circles_plan)
     for i in range(nsx):
         bx=PLX+10+i*spx
         if bx>PLX+WR-8: break
@@ -1557,6 +1576,8 @@ def generate_dxf_forjado(data) -> io.BytesIO:
         by=PLY+10+i*spy
         if by>PLY+HR-8: break
         _L(msp,PLX+5,by,PLX+WR-5,by,"ARMADURA",lw=max(12,int(dy*4)))
+    _rect(msp,PLX,PLY,WR,HR,"SECCION",lw=70)
+    _draw_concrete_mask(msp, WR, HR, circles_plan, PLX, PLY)
 
     ycp=PLY-10
     _dim_h(msp,PLX,PLX+10,ycp,PLY,"10",ht=1.8)
@@ -1603,19 +1624,22 @@ def generate_dxf_footing(data) -> io.BytesIO:
 
     # PLANTA
     circles = list(getattr(data, 'picked_circles', None) or [])
-    _fill_gray(msp,_rpts(0,0,L,WW))
+    circles_plan = _to_dxf_circles(circles, 0, 0, L, WW, 'section')
     px=(L-pw)/2; py=(WW-pd)/2
-    # Picado: solo donde el usuario pinto con la brocha
-    _fill_picado_circles(msp, circles, 0, 0, L, WW)
-    _fill_gray(msp,_rpts(px,py,pw,pd),color=250)
 
+    # Gold-standard: repair → barras → pedestal → outline → concrete mask
+    _draw_repair_texture(msp, circles_plan)
+    for i in range(min(nx,20)): _L(msp,cs+i*spx,cs,cs+i*spx,WW-cs,"ARMADURA",lw=max(15,int(dx*5)))
+    for i in range(min(ny,20)): _L(msp,cs,cs+i*spy,L-cs,cs+i*spy,"ARMADURA",lw=max(12,int(dy*4)))
+    # Pedestal encima (relleno oscuro)
+    h_ped = msp.add_hatch(dxfattribs={"layer": "SECCION"})
+    h_ped.set_solid_fill(color=252)
+    h_ped.paths.add_polyline_path(_rpts(px, py, pw, pd), is_closed=True)
     _rect(msp,0,0,L,WW,"SECCION",lw=70)
     _rect(msp,px,py,pw,pd,"SECCION",lw=35)
     _T(msp,px+pw/2,py+pd/2,1.8,f"P {pw:.0f}x{pd:.0f}","TEXTO",
        TextEntityAlignment.CENTER)
-
-    for i in range(min(nx,20)): _L(msp,cs+i*spx,cs,cs+i*spx,WW-cs,"ARMADURA",lw=max(15,int(dx*5)))
-    for i in range(min(ny,20)): _L(msp,cs,cs+i*spy,L-cs,cs+i*spy,"ARMADURA",lw=max(12,int(dy*4)))
+    _draw_concrete_mask(msp, L, WW, circles_plan, 0, 0)
 
     _dim_h(msp,0,L,-10,0,f"{L:.0f}",ht=2.5)
     _dim_h(msp,0,cs,-18,0,f"{cs:.0f}",ht=1.8)
@@ -1628,9 +1652,11 @@ def generate_dxf_footing(data) -> io.BytesIO:
 
     # SECCION X-X
     SX=0; SY=-(H+48)
-    _fill_gray(msp,_rpts(SX,SY,L,H))
-    _rect(msp,SX,SY,L,H,"SECCION",lw=70)
+    circles_xx = _to_dxf_circles(circles, SX, SY, L, H, 'sectionX')
+    _draw_repair_texture(msp, circles_xx)
     for i in range(min(nx,20)): _fill_bar(msp,SX+cs+i*spx,SY+cb,max(.7,dx/20))
+    _rect(msp,SX,SY,L,H,"SECCION",lw=70)
+    _draw_concrete_mask(msp, L, H, circles_xx, SX, SY)
     _dim_h(msp,SX,SX+L,SY-10,SY,f"{L:.0f}",ht=2.2)
     _dim_v(msp,SY,SY+H,SX+L+12,SX+L,f"{H:.0f}",ht=2.2)
     _dim_v(msp,SY,SY+cb,SX+L+20,SX+L,f"{cb:.0f}",ht=1.8)
@@ -1638,9 +1664,11 @@ def generate_dxf_footing(data) -> io.BytesIO:
 
     # SECCION Y-Y
     SYX=L+32; SYY=SY
-    _fill_gray(msp,_rpts(SYX,SYY,WW,H))
-    _rect(msp,SYX,SYY,WW,H,"SECCION",lw=70)
+    circles_yy = _to_dxf_circles(circles, SYX, SYY, WW, H, 'sectionY')
+    _draw_repair_texture(msp, circles_yy)
     for i in range(min(ny,20)): _fill_bar(msp,SYX+cs+i*spy,SYY+cb,max(.7,dy/20))
+    _rect(msp,SYX,SYY,WW,H,"SECCION",lw=70)
+    _draw_concrete_mask(msp, WW, H, circles_yy, SYX, SYY)
     _dim_h(msp,SYX,SYX+WW,SYY-10,SYY,f"{WW:.0f}",ht=2.2)
     _dim_v(msp,SYY,SYY+H,SYX+WW+12,SYX+WW,f"{H:.0f}",ht=2.2)
     _title(msp,SYX+WW/2,SYY+H+8,"SECCION Y-Y")
@@ -1680,16 +1708,16 @@ def generate_dxf_stair(data) -> io.BytesIO:
 
     doc,msp=_make_doc()
 
-    # Peldanos: intacto (gris)
+    # Bounds del canvas de escalera
+    stair_h = n * riser + th
+    circles = list(getattr(data, 'picked_circles', None) or [])
+    circles_stair = _to_dxf_circles(circles, ox, oy - n * riser, n * tread, stair_h, 'section')
+
+    # Fondo: peldaños en gris + repair texture encima
     for i in range(n):
         px=ox+i*tread; py=oy-(i+1)*riser
         _fill_gray(msp,[(px,py),(px+tread,py),(px+tread,py+riser),(px,py+riser)])
-
-    # Picado: solo donde el usuario pinto con la brocha
-    # Bounds del canvas de escalera: origen (ox, oy-n*riser), tamaño (n*tread) x (n*riser+th)
-    stair_h = n * riser + th
-    circles = list(getattr(data, 'picked_circles', None) or [])
-    _fill_picado_circles(msp, circles, ox, oy - n * riser, n * tread, stair_h)
+    _draw_repair_texture(msp, circles_stair)
 
     # Contorno
     cur_x,cur_y=ox,oy
