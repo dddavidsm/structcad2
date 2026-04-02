@@ -1046,7 +1046,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             continue
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
-        y_pos = zt - ny * ih   # ny=0 → tope zona insp.; ny=1 → base zona insp.
+        y_pos = zb + ny * (zt - zb)   # canvas: ny=0→abajo(zb), ny=1→arriba(zt)
         # CONTRATO GEOMETRICO ALZADO LATERAL:
         # El eje X del alzado lateral proyecta la coordenada Y de la planta.
         # TOP de la planta (PY+D) -> IZQUIERDA del alzado (LX, origen)
@@ -1161,7 +1161,7 @@ def generate_dxf_pillar_rect(data) -> io.BytesIO:
             continue
         tie_bar_ids = tie.get('barIds', [])
         ny = float(tie.get('ny', 0.5))
-        y_pos = zt_f - ny * ih   # ny=0 → tope zona insp.; ny=1 → base zona insp.
+        y_pos = zb_f + ny * (zt_f - zb_f)   # canvas: ny=0→abajo(zb_f), ny=1→arriba(zt_f)
         # CONTRATO GEOMETRICO ALZADO FRONTAL:
         # El eje X del alzado frontal proyecta directamente la coordenada X de la planta.
         # IZQUIERDA planta (PX) -> IZQUIERDA alzado (FX)
